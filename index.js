@@ -68,6 +68,36 @@ async function createDoubleDb (dataDirectory) {
     return puttableRecord;
   }
 
+  async function patch (id, newDocument) {
+    if (!id) {
+      throw new Error('doubledb.patch: no id was supplied to patch function');
+    }
+
+    if (!newDocument) {
+      throw new Error('doubledb.patch: no newDocument was supplied to patch function');
+    }
+
+    if (newDocument.id && id !== newDocument.id) {
+      throw new Error(`doubledb.patch: the id (${id}) and newDocument.id (${newDocument.id}) must be the same, or not defined`);
+    }
+
+    const existingDocument = await db.get(id)
+      .catch(notFoundToUndefined);
+
+    if (!existingDocument) {
+      throw new Error(`doubledb.patch: document with id ${id} does not exist`);
+    }
+
+    const puttableRecord = {
+      ...JSON.parse(existingDocument),
+      ...newDocument,
+      id
+    };
+    await db.put(id, JSON.stringify(puttableRecord));
+
+    return puttableRecord;
+  }
+
   async function read (id) {
     const document = await db.get(id)
       .catch(notFoundToUndefined);
@@ -79,10 +109,27 @@ async function createDoubleDb (dataDirectory) {
     return JSON.parse(document);
   }
 
+  async function remove (id) {
+    if (!id) {
+      throw new Error('doubledb.remove: no id was supplied to replace function');
+    }
+
+    const existingDocument = await db.get(id)
+      .catch(notFoundToUndefined);
+
+    if (!existingDocument) {
+      throw new Error(`doubledb.remove: document with id ${id} does not exist`);
+    }
+
+    return db.del(id);
+  }
+
   return {
     _level: db,
     insert,
     replace,
+    patch,
+    remove,
     read,
     close: db.close.bind(db)
   };

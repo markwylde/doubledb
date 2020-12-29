@@ -15,8 +15,8 @@ npm install --save doubledb
 - [x]  read
 - [x]  insert
 - [x]  replace
-- [ ]  patch
-- [ ]  delete
+- [x]  patch
+- [x]  remove
 - [ ]  find
 
 ## Usage
@@ -46,5 +46,5 @@ const record = doubled.find({
 
 doubled.replace(record.id, { firstName: 'Joe', lastName: 'Bloggs' })
 doubled.patch(record.id, { firstName: 'Bob' })
-doubled.delete(record.id)
+doubled.remove(record.id)
 ```
