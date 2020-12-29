@@ -15,6 +15,18 @@ async function createDoubleDb (dataDirectory) {
 
   const db = level(dataDirectory);
 
+  async function addToIndexes (id, object, prefix = '') {
+    const promises = Object.keys(object).map(key => {
+      if (typeof object[key] === 'object') {
+        return addToIndexes(id, object[key], prefix + '.' + key);
+      }
+
+      return db.put('indexes' + prefix + '.' + key + '=' + object[key], id);
+    });
+
+    return Promise.all(promises);
+  }
+
   async function insert (document) {
     if (!document) {
       throw new Error('doubledb.insert: no document was supplied to insert function');
@@ -34,7 +46,9 @@ async function createDoubleDb (dataDirectory) {
       id,
       ...document
     };
+
     await db.put(id, JSON.stringify(puttableRecord));
+    await addToIndexes(id, puttableRecord);
 
     return puttableRecord;
   }

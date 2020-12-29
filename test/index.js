@@ -3,6 +3,8 @@ const fs = require('fs').promises;
 const test = require('basictap');
 const createDoubleDb = require('../');
 
+require('./indexes');
+
 test('read - no id supplied - throws', async t => {
   t.plan(1);
 
