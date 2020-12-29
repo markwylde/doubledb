@@ -30,13 +30,42 @@ async function createDoubleDb (dataDirectory) {
     }
 
     const id = document.id || uuid();
-    const insertableRecord = {
+    const puttableRecord = {
       id,
       ...document
     };
-    await db.put(id, JSON.stringify(insertableRecord));
+    await db.put(id, JSON.stringify(puttableRecord));
 
-    return insertableRecord;
+    return puttableRecord;
+  }
+
+  async function replace (id, newDocument) {
+    if (!id) {
+      throw new Error('doubledb.replace: no id was supplied to replace function');
+    }
+
+    if (!newDocument) {
+      throw new Error('doubledb.replace: no newDocument was supplied to replace function');
+    }
+
+    if (newDocument.id && id !== newDocument.id) {
+      throw new Error(`doubledb.replace: the id (${id}) and newDocument.id (${newDocument.id}) must be the same, or not defined`);
+    }
+
+    const existingDocument = await db.get(id)
+      .catch(notFoundToUndefined);
+
+    if (!existingDocument) {
+      throw new Error(`doubledb.replace: document with id ${id} does not exist`);
+    }
+
+    const puttableRecord = {
+      ...newDocument,
+      id
+    };
+    await db.put(id, JSON.stringify(puttableRecord));
+
+    return puttableRecord;
   }
 
   async function read (id) {
@@ -53,6 +82,7 @@ async function createDoubleDb (dataDirectory) {
   return {
     _level: db,
     insert,
+    replace,
     read,
     close: db.close.bind(db)
   };

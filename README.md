@@ -11,6 +11,13 @@ An on disk database that indexes everything for fast querying.
 npm install --save doubledb
 ```
 
+## Features
+- [x]  read
+- [x]  insert
+- [x]  replace
+- [ ]  patch
+- [ ]  delete
+
 ## Usage
 ```javascript
 const createDoubled = require('doubledb')
