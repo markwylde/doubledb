@@ -21,7 +21,7 @@ test('indexes - single level - stores correct indexes', async t => {
   });
 
   const indexes = [];
-  db._level.createReadStream({ gt: 'indexes.', lt: 'indexesz' })
+  db._level.createReadStream({ gt: 'indexes.', lt: 'indexes~' })
     .on('data', function (data) {
       indexes.push(data);
     })
