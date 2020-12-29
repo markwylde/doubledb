@@ -1,0 +1,29 @@
+{
+  "name": "doubledb",
+  "version": "1.0.0",
+  "description": "An on disk database that indexes everything for fast querying.",
+  "main": "index.js",
+  "scripts": {
+    "test": "c8 node --unhandled-rejections=strict test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markwylde/doubledb.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/markwylde/doubledb/issues"
+  },
+  "homepage": "https://github.com/markwylde/doubledb#readme",
+  "devDependencies": {
+    "basictap": "^1.1.11",
+    "c8": "^7.3.5",
+    "semistandard": "^16.0.0"
+  },
+  "dependencies": {
+    "level": "^6.0.1",
+    "uuid": "^8.3.2"
+  }
+}
