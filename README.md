@@ -17,6 +17,7 @@ npm install --save doubledb
 - [x]  replace
 - [ ]  patch
 - [ ]  delete
+- [ ]  find
 
 ## Usage
 ```javascript
