@@ -21,7 +21,7 @@ async function createDoubleDb (dataDirectory) {
         return addToIndexes(id, object[key], prefix + '.' + key);
       }
 
-      return db.put('indexes' + prefix + '.' + key + '=' + object[key], id);
+      return db.put('indexes' + prefix + '.' + key + '.' + id + '=' + object[key], id);
     });
 
     return Promise.all(promises);
