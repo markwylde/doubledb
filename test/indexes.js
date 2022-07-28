@@ -6,7 +6,7 @@ const createDoubleDb = require('../');
 test('indexes - single level - stores correct indexes', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true }).catch(() => {});
   const db = await createDoubleDb('./testData');
 
   await db.insert({
