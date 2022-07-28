@@ -1,9 +1,9 @@
 const fs = require('fs').promises;
-const level = require('level');
+const { Level } = require('level');
 const uuid = require('uuid').v4;
 
 function notFoundToUndefined (error) {
-  if (error.name === 'NotFoundError') {
+  if (error.code === 'LEVEL_NOT_FOUND') {
     return;
   }
 
@@ -13,7 +13,7 @@ function notFoundToUndefined (error) {
 async function createDoubleDb (dataDirectory) {
   await fs.mkdir(dataDirectory, { recursive: true });
 
-  const db = level(dataDirectory);
+  const db = new Level(dataDirectory);
 
   async function addToIndexes (id, object, prefix = '') {
     const promises = Object.keys(object).map(key => {

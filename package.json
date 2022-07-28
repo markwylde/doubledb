@@ -18,12 +18,12 @@
   },
   "homepage": "https://github.com/markwylde/doubledb#readme",
   "devDependencies": {
-    "basictap": "^1.1.11",
-    "c8": "^7.3.5",
-    "semistandard": "^16.0.0"
+    "basictap": "^3.2.3",
+    "c8": "^7.12.0",
+    "semistandard": "^16.0.1"
   },
   "dependencies": {
-    "level": "^6.0.1",
+    "level": "^8.0.0",
     "uuid": "^8.3.2"
   }
 }

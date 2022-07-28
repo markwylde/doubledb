@@ -8,20 +8,21 @@ require('./indexes');
 test('read - no id supplied - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
+
   try {
     await db.read();
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'key cannot be `null` or `undefined`');
+    t.equal(error.message, 'Key cannot be null or undefined');
   }
 });
 
 test('read - not found - returns undefined', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
   const readRecord = await db.read('nothing in here');
   await db.close();
@@ -32,7 +33,7 @@ test('read - not found - returns undefined', async t => {
 test('read - found - returns document', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
   const insertedRecord = await db.insert({
     a: 1
@@ -48,7 +49,7 @@ test('read - found - returns document', async t => {
 test('create - existing key - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
   await db.insert({
     id: 'myid',
@@ -70,7 +71,7 @@ test('create - existing key - throws', async t => {
 test('create - missing arguments - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
 
   try {
@@ -84,7 +85,7 @@ test('create - missing arguments - throws', async t => {
 test('replace - missing id argument - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
 
   try {
@@ -98,7 +99,7 @@ test('replace - missing id argument - throws', async t => {
 test('replace - missing newDocument argument - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
 
   try {
@@ -112,7 +113,7 @@ test('replace - missing newDocument argument - throws', async t => {
 test('replace - none matching id and newDocument.id - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
 
   try {
@@ -126,7 +127,7 @@ test('replace - none matching id and newDocument.id - throws', async t => {
 test('replace - not found - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
 
   try {
@@ -140,7 +141,7 @@ test('replace - not found - throws', async t => {
 test('replace - found - returns new document', async t => {
   t.plan(3);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
   const insertedRecord = await db.insert({
     a: 1
@@ -162,7 +163,7 @@ test('replace - found - returns new document', async t => {
 test('patch - missing id argument - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
 
   try {
@@ -176,7 +177,7 @@ test('patch - missing id argument - throws', async t => {
 test('patch - missing newDocument argument - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
 
   try {
@@ -190,7 +191,7 @@ test('patch - missing newDocument argument - throws', async t => {
 test('patch - none matching id and newDocument.id - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
 
   try {
@@ -204,7 +205,7 @@ test('patch - none matching id and newDocument.id - throws', async t => {
 test('patch - not found - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
 
   try {
@@ -218,7 +219,7 @@ test('patch - not found - throws', async t => {
 test('patch - found - returns patched document', async t => {
   t.plan(2);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
   const insertedRecord = await db.insert({
     a: 1,
@@ -252,7 +253,7 @@ test('patch - found - returns patched document', async t => {
 test('remove - missing id argument - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
 
   try {
@@ -266,7 +267,7 @@ test('remove - missing id argument - throws', async t => {
 test('remove - not found - throws', async t => {
   t.plan(1);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
 
   try {
@@ -280,7 +281,7 @@ test('remove - not found - throws', async t => {
 test('remove - found - removes document', async t => {
   t.plan(3);
 
-  await fs.rmdir('./testData', { recursive: true });
+  await fs.rm('./testData', { recursive: true });
   const db = await createDoubleDb('./testData');
   const insertedRecord = await db.insert({
     a: 1

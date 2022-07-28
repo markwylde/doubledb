@@ -21,21 +21,20 @@ test('indexes - single level - stores correct indexes', async t => {
   });
 
   const indexes = [];
-  db._level.createReadStream({ gt: 'indexes.', lt: 'indexes~' })
-    .on('data', function (data) {
-      indexes.push(data);
-    })
-    .on('end', function () {
-      console.log('Stream ended');
-      db.close();
 
-      t.deepEqual(indexes, [
-        { key: 'indexes.id.myid=myid', value: 'myid' },
-        { key: 'indexes.nested.a.myid=1', value: 'myid' },
-        { key: 'indexes.testNumberA.myid=1', value: 'myid' },
-        { key: 'indexes.testNumberB.myid=2', value: 'myid' },
-        { key: 'indexes.testStringA.myid=this is test a', value: 'myid' },
-        { key: 'indexes.testStringB.myid=this is test a', value: 'myid' }
-      ]);
-    });
+  for await (const [key, value] of db._level.iterator({ gt: 'indexes.', lt: 'indexes~' })) {
+    indexes.push({ key, value });
+  }
+
+  console.log('Stream ended');
+  db.close();
+
+  t.deepEqual(indexes, [
+    { key: 'indexes.id.myid=myid', value: 'myid' },
+    { key: 'indexes.nested.a.myid=1', value: 'myid' },
+    { key: 'indexes.testNumberA.myid=1', value: 'myid' },
+    { key: 'indexes.testNumberB.myid=2', value: 'myid' },
+    { key: 'indexes.testStringA.myid=this is test a', value: 'myid' },
+    { key: 'indexes.testStringB.myid=this is test a', value: 'myid' }
+  ]);
 });
