@@ -137,10 +137,11 @@ async function createDoubleDb (dataDirectory) {
   async function findOrFilter (type, key, value) {
     const promises = [];
     for await (const ckey of db.keys({
-      gt: `indexes.${key}=${value}.`,
-      lt: `indexes.${key}=${value}~`
+      gt: `indexes.${key}=${value}|`,
+      lt: `indexes.${key}=${value}|~`
     })) {
       const [, lvalueAndKey] = ckey.split('=');
+      console.log(lvalueAndKey);
       const lvalue = lvalueAndKey.split('|')[0];
 
       if (lvalue == value) {
@@ -163,8 +164,8 @@ async function createDoubleDb (dataDirectory) {
   async function findOrFilterByFunction (type, key, fn) {
     const promises = [];
     for await (const ckey of db.keys({
-      gt: `indexes.${key}.`,
-      lt: `indexes.${key}~`
+      gt: `indexes.${key}=`,
+      lt: `indexes.${key}=~`
     })) {
       const [, lvalueAndKey] = ckey.split('=');
       const lvalue = lvalueAndKey.split('|')[0];
