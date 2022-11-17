@@ -1,7 +1,6 @@
-const fs = require('fs').promises;
-
-const test = require('basictap');
-const createDoubleDb = require('../');
+import { promises as fs } from 'fs';
+import test from 'basictap';
+import createDoubleDb from '../index.js';
 
 test('indexes - single level - stores correct indexes', async t => {
   t.plan(1);
@@ -17,7 +16,8 @@ test('indexes - single level - stores correct indexes', async t => {
     testNumberB: 2,
     nested: {
       a: 1
-    }
+    },
+    array: ['testa', 'testb']
   });
 
   const indexes = [];
@@ -30,6 +30,8 @@ test('indexes - single level - stores correct indexes', async t => {
   db.close();
 
   t.deepEqual(indexes, [
+    { key: 'indexes.array.myid=testa', value: 'myid' },
+    { key: 'indexes.array.myid=testb', value: 'myid' },
     { key: 'indexes.id.myid=myid', value: 'myid' },
     { key: 'indexes.nested.a.myid=1', value: 'myid' },
     { key: 'indexes.testNumberA.myid=1', value: 'myid' },

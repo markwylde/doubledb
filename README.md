@@ -17,20 +17,41 @@ npm install --save doubledb
 - [x]  replace
 - [x]  patch
 - [x]  remove
-- [ ]  find
+- [x]  find
+- [x]  filter
+- [ ]  query
 
 ## Usage
 ```javascript
-const createDoubled = require('doubledb')
-const doubled = doubled('./data')
+import createDoubledb from 'doubledb';
+const doubledb = createDoubledb('./data');
 
-doubled.insert({
+doubledb.insert({
   id: undefined, // defaults to uuid, must be unique
   firstName: 'Joe',
-  lastName: 'Bloggs'
-})
+  lastName: 'Bloggs',
+  stats: {
+    wins: 10,
+    loses: 5
+  },
+  skills: ['cooking', 'running']
+});
 
-const record = doubled.find({
+doubledb.get(record.id);
+doubledb.find('firstName', 'Joe');
+doubledb.find('stats.wins', 10);
+doubledb.find('skills', 'cooking');
+doubledb.find('firstName', v => v.startsWith('J'));
+doubledb.filter('firstName', 'Joe');
+doubledb.filter('firstName', v => v.startsWith('J'));
+doubledb.replace(record.id, { firstName: 'Joe', lastName: 'Bloggs' });
+doubledb.patch(record.id, { firstName: 'Bob' });
+doubledb.remove(record.id);
+```
+
+### Proposed Query
+```javascript
+const record = doubledb.query({
   location: 'London',
   category: 'b',
 
@@ -43,8 +64,4 @@ const record = doubled.find({
     }
   }
 })
-
-doubled.replace(record.id, { firstName: 'Joe', lastName: 'Bloggs' })
-doubled.patch(record.id, { firstName: 'Bob' })
-doubled.remove(record.id)
 ```

@@ -1,6 +1,6 @@
-const fs = require('fs').promises;
-const { Level } = require('level');
-const uuid = require('uuid').v4;
+import { promises as fs } from 'fs';
+import { Level } from 'level';
+import { v4 as uuid } from 'uuid';
 
 function notFoundToUndefined (error) {
   if (error.code === 'LEVEL_NOT_FOUND') {
@@ -10,6 +10,8 @@ function notFoundToUndefined (error) {
   throw error;
 }
 
+const isObject = thing => thing instanceof Object && !Array.isArray(thing);
+
 async function createDoubleDb (dataDirectory) {
   await fs.mkdir(dataDirectory, { recursive: true });
 
@@ -17,11 +19,20 @@ async function createDoubleDb (dataDirectory) {
 
   async function addToIndexes (id, object, prefix = '') {
     const promises = Object.keys(object).map(key => {
-      if (typeof object[key] === 'object') {
-        return addToIndexes(id, object[key], prefix + '.' + key);
+      if (isObject(object[key])) {
+        addToIndexes(id, object[key], prefix + '.' + key);
+        return null;
       }
 
-      return db.put('indexes' + prefix + '.' + key + '.' + id + '=' + object[key], id);
+      if (Array.isArray(object[key])) {
+        for (const index in object[key]) {
+          db.put('indexes' + prefix + '.' + key + '.' + id + '=' + object[key][index], id);
+        }
+        return null;
+      }
+
+      db.put('indexes' + prefix + '.' + key + '.' + id + '=' + object[key], id);
+      return null;
     });
 
     return Promise.all(promises);
@@ -123,6 +134,46 @@ async function createDoubleDb (dataDirectory) {
     return JSON.parse(document);
   }
 
+  async function findOrFilter (type, key, valueOrFunction) {
+    const lookupType = valueOrFunction instanceof Function ? 'function' : 'value';
+
+    const promises = [];
+    for await (const [ckey, id] of db.iterator({
+      gt: `indexes.${key}.`,
+      lt: `indexes.${key}~`
+    })) {
+      const [, lvalue] = ckey.split('=');
+      if (lookupType === 'value' && lvalue == valueOrFunction) {
+        promises.push(read(id));
+        if (type === 'find') {
+          break;
+        }
+      }
+
+      if (lookupType === 'function' && valueOrFunction(lvalue)) {
+        promises.push(read(id));
+        if (type === 'find') {
+          break;
+        }
+      }
+    }
+
+    const results = await Promise.all(promises);
+    if (type === 'filter') {
+      return results;
+    } else {
+      return results[0];
+    }
+  }
+
+  async function find (key, valueOrFunction) {
+    return findOrFilter('find', key, valueOrFunction);
+  }
+
+  async function filter (key, valueOrFunction) {
+    return findOrFilter('filter', key, valueOrFunction);
+  }
+
   async function remove (id) {
     if (!id) {
       throw new Error('doubledb.remove: no id was supplied to replace function');
@@ -140,6 +191,8 @@ async function createDoubleDb (dataDirectory) {
 
   return {
     _level: db,
+    find,
+    filter,
     insert,
     replace,
     patch,
@@ -149,4 +202,4 @@ async function createDoubleDb (dataDirectory) {
   };
 }
 
-module.exports = createDoubleDb;
+export default createDoubleDb;

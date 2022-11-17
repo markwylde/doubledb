@@ -1,9 +1,118 @@
-const fs = require('fs').promises;
+import { promises as fs } from 'fs';
+import test from 'basictap';
+import createDoubleDb from '../index.js';
 
-const test = require('basictap');
-const createDoubleDb = require('../');
+await import('./indexes.js');
 
-require('./indexes');
+test('find - top level key found - returns document', async t => {
+  t.plan(1);
+
+  await fs.rm('./testData', { recursive: true }).catch(() => {});
+  const db = await createDoubleDb('./testData');
+  await db.insert({ id: 'id1', a: 1 });
+  await db.insert({ id: 'id2', a: 2 });
+  await db.insert({ id: 'id3', a: 3 });
+  await db.insert({ id: 'id4', a: 4 });
+
+  const findRecord = await db.find('a', 2);
+
+  await db.close();
+
+  t.deepEqual(findRecord, {
+    id: 'id2',
+    a: 2
+  });
+});
+
+test('find - top level key found by function - returns document', async t => {
+  t.plan(1);
+
+  await fs.rm('./testData', { recursive: true }).catch(() => {});
+  const db = await createDoubleDb('./testData');
+  await db.insert({ id: 'id1', a: 'one' });
+  await db.insert({ id: 'id2', a: 'two' });
+  await db.insert({ id: 'id3', a: 'three' });
+  await db.insert({ id: 'id4', a: 'four' });
+
+  const findRecord = await db.find('a', v => v === 'two');
+
+  await db.close();
+
+  t.deepEqual(findRecord, {
+    id: 'id2',
+    a: 'two'
+  });
+});
+
+test('find - nested key found - returns document', async t => {
+  t.plan(1);
+
+  await fs.rm('./testData', { recursive: true }).catch(() => {});
+  const db = await createDoubleDb('./testData');
+  await db.insert({ id: 'id1', a: { b: 1 } });
+  await db.insert({ id: 'id2', a: { b: 2 } });
+  await db.insert({ id: 'id3', a: { b: 3 } });
+  await db.insert({ id: 'id4', a: { b: 4 } });
+
+  const findRecord = await db.find('a', 2);
+
+  await db.close();
+
+  t.deepEqual(findRecord, {
+    id: 'id2',
+    a: {
+      b: 2
+    }
+  });
+});
+
+test('find - array top level key found - returns document', async t => {
+  t.plan(1);
+
+  await fs.rm('./testData', { recursive: true }).catch(() => {});
+  const db = await createDoubleDb('./testData');
+  await db.insert({ id: 'id1', a: [1, 2] });
+  await db.insert({ id: 'id2', a: [2, 3] });
+  await db.insert({ id: 'id3', a: [3, 4] });
+  await db.insert({ id: 'id4', a: [4, 5] });
+
+  const findRecord = await db.find('a', 2);
+
+  await db.close();
+
+  t.deepEqual(findRecord, {
+    id: 'id1',
+    a: [1, 2]
+  });
+});
+
+test('filter - top level key found - returns documents', async t => {
+  t.plan(1);
+
+  await fs.rm('./testData', { recursive: true }).catch(() => {});
+  const db = await createDoubleDb('./testData');
+  await db.insert({ id: 'id1', a: 1 });
+  await db.insert({ id: 'id2', a: 2, b: 1 });
+  await db.insert({ id: 'id3', a: 2, b: 2 });
+  await db.insert({ id: 'id4', a: 4 });
+
+  const filterRecords = await db.filter('a', 2);
+
+  await db.close();
+
+  t.deepEqual(filterRecords, [
+    {
+      a: 2,
+      b: 1,
+      id: 'id2'
+    },
+    {
+      a: 2,
+      b: 2,
+      id: 'id3'
+    }
+  ]);
+});
 
 test('read - no id supplied - throws', async t => {
   t.plan(1);
