@@ -54,7 +54,7 @@ test('find - nested key found - returns document', async t => {
   await db.insert({ id: 'id3', a: { b: 3 } });
   await db.insert({ id: 'id4', a: { b: 4 } });
 
-  const findRecord = await db.find('a', 2);
+  const findRecord = await db.find('a.b', 2);
 
   await db.close();
 

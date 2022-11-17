@@ -30,13 +30,13 @@ test('indexes - single level - stores correct indexes', async t => {
   db.close();
 
   t.deepEqual(indexes, [
-    { key: 'indexes.array.myid=testa', value: 'myid' },
-    { key: 'indexes.array.myid=testb', value: 'myid' },
-    { key: 'indexes.id.myid=myid', value: 'myid' },
-    { key: 'indexes.nested.a.myid=1', value: 'myid' },
-    { key: 'indexes.testNumberA.myid=1', value: 'myid' },
-    { key: 'indexes.testNumberB.myid=2', value: 'myid' },
-    { key: 'indexes.testStringA.myid=this is test a', value: 'myid' },
-    { key: 'indexes.testStringB.myid=this is test a', value: 'myid' }
+    { key: 'indexes.array=testa|myid', value: 'myid' },
+    { key: 'indexes.array=testb|myid', value: 'myid' },
+    { key: 'indexes.id=myid|myid', value: 'myid' },
+    { key: 'indexes.nested.a=1|myid', value: 'myid' },
+    { key: 'indexes.testNumberA=1|myid', value: 'myid' },
+    { key: 'indexes.testNumberB=2|myid', value: 'myid' },
+    { key: 'indexes.testStringA=this is test a|myid', value: 'myid' },
+    { key: 'indexes.testStringB=this is test a|myid', value: 'myid' }
   ]);
 });

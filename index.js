@@ -26,12 +26,12 @@ async function createDoubleDb (dataDirectory) {
 
       if (Array.isArray(object[key])) {
         for (const index in object[key]) {
-          db.put('indexes' + prefix + '.' + key + '.' + id + '=' + object[key][index], id);
+          db.put('indexes' + prefix + '.' + key + '=' + object[key][index] + '|' + id, id);
         }
         return null;
       }
 
-      db.put('indexes' + prefix + '.' + key + '.' + id + '=' + object[key], id);
+      db.put('indexes' + prefix + '.' + key + '=' + object[key] + '|' + id, id);
       return null;
     });
 
@@ -134,23 +134,43 @@ async function createDoubleDb (dataDirectory) {
     return JSON.parse(document);
   }
 
-  async function findOrFilter (type, key, valueOrFunction) {
-    const lookupType = valueOrFunction instanceof Function ? 'function' : 'value';
-
+  async function findOrFilter (type, key, value) {
     const promises = [];
-    for await (const [ckey, id] of db.iterator({
-      gt: `indexes.${key}.`,
-      lt: `indexes.${key}~`
+    for await (const ckey of db.keys({
+      gt: `indexes.${key}=${value}.`,
+      lt: `indexes.${key}=${value}~`
     })) {
-      const [, lvalue] = ckey.split('=');
-      if (lookupType === 'value' && lvalue == valueOrFunction) {
+      const [, lvalueAndKey] = ckey.split('=');
+      const lvalue = lvalueAndKey.split('|')[0];
+
+      if (lvalue == value) {
+        const id = await db.get(ckey);
         promises.push(read(id));
         if (type === 'find') {
           break;
         }
       }
+    }
 
-      if (lookupType === 'function' && valueOrFunction(lvalue)) {
+    const results = await Promise.all(promises);
+    if (type === 'filter') {
+      return results;
+    } else {
+      return results[0];
+    }
+  }
+
+  async function findOrFilterByFunction (type, key, fn) {
+    const promises = [];
+    for await (const ckey of db.keys({
+      gt: `indexes.${key}.`,
+      lt: `indexes.${key}~`
+    })) {
+      const [, lvalueAndKey] = ckey.split('=');
+      const lvalue = lvalueAndKey.split('|')[0];
+
+      if (fn(lvalue)) {
+        const id = await db.get(ckey);
         promises.push(read(id));
         if (type === 'find') {
           break;
@@ -167,11 +187,15 @@ async function createDoubleDb (dataDirectory) {
   }
 
   async function find (key, valueOrFunction) {
-    return findOrFilter('find', key, valueOrFunction);
+    return valueOrFunction instanceof Function
+      ? findOrFilterByFunction('find', key, valueOrFunction)
+      : findOrFilter('find', key, valueOrFunction);
   }
 
   async function filter (key, valueOrFunction) {
-    return findOrFilter('filter', key, valueOrFunction);
+    return valueOrFunction instanceof Function
+      ? findOrFilterByFunction('filter', key, valueOrFunction)
+      : findOrFilter('filter', key, valueOrFunction);
   }
 
   async function remove (id) {
