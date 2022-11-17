@@ -11,15 +11,31 @@ test('stress test', async t => {
   let id = 1;
   {
     const startTime = Date.now();
-    for (let x = 0; x < 500; x++) {
-      const promises = [];
-      for (let y = 0; y < 100; y++) {
+    for (let x = 0; x < 100; x++) {
+      const actions = [];
+      console.log(x);
+      for (let y = 0; y < 10000; y++) {
         id++;
-        promises.push(
-          db.insert({ id, a: 1 })
-        );
+        actions.push({
+          type: 'put',
+          key: id,
+          value: JSON.stringify({
+            id,
+            a: 1
+          })
+        });
+        actions.push({
+          type: 'put',
+          key: `indexes.a=1|${id}`,
+          value: id
+        });
+        actions.push({
+          type: 'put',
+          key: `indexes.id=${id}|${id}`,
+          value: id
+        });
       }
-      await Promise.all(promises);
+      await db._level.batch(actions);
     }
     const endTime = Date.now();
 

@@ -2,6 +2,9 @@ import { promises as fs } from 'fs';
 import { Level } from 'level';
 import { v4 as uuid } from 'uuid';
 
+export const FirstUnicodeCharacter = '\u{0000}';
+export const LastUnicodeCharacter = '\u{10FFFF}';
+
 function notFoundToUndefined (error) {
   if (error.code === 'LEVEL_NOT_FOUND') {
     return;
@@ -134,20 +137,34 @@ async function createDoubleDb (dataDirectory) {
     return JSON.parse(document);
   }
 
-  async function findOrFilter (type, key, value) {
+  async function findOrFilter (type, key, value, options) {
+    options = {
+      skip: 0,
+      limit: type === 'find' ? 1 : Infinity,
+      ...options
+    };
     const promises = [];
+    let skipIndex = 0;
     for await (const ckey of db.keys({
       gt: `indexes.${key}=${value}|`,
-      lt: `indexes.${key}=${value}|~`
+      lte: `indexes.${key}=${value}|${LastUnicodeCharacter}`
     })) {
       const [, lvalueAndKey] = ckey.split('=');
-      console.log(lvalueAndKey);
       const lvalue = lvalueAndKey.split('|')[0];
 
       if (lvalue == value) {
+        if (skipIndex < options.skip) {
+          skipIndex = skipIndex + 1;
+          continue;
+        }
+
         const id = await db.get(ckey);
         promises.push(read(id));
         if (type === 'find') {
+          break;
+        }
+
+        if (promises.length >= options.limit) {
           break;
         }
       }
@@ -161,19 +178,57 @@ async function createDoubleDb (dataDirectory) {
     }
   }
 
-  async function findOrFilterByFunction (type, key, fn) {
+  async function findOrFilterByFunction (type, key, fn, options) {
+    options = {
+      skip: 0,
+      limit: type === 'find' ? 1 : Infinity,
+      gt: options?.gt,
+      lt: options?.lt,
+      lte: options?.lte,
+      gte: options?.gte,
+      ...options
+    };
     const promises = [];
-    for await (const ckey of db.keys({
-      gt: `indexes.${key}=`,
-      lt: `indexes.${key}=~`
-    })) {
+    let skipIndex = 0;
+
+    const query = {};
+
+    if (options.gte) {
+      query.gte = `indexes.${key}=${options.gte}`;
+    }
+    if (options.gt) {
+      query.gt = `indexes.${key}=${options.gt}|${LastUnicodeCharacter}`;
+    }
+    if (options.lte) {
+      query.lte = `indexes.${key}=${options.lte}|${LastUnicodeCharacter}`;
+    }
+    if (options.lt) {
+      query.lt = `indexes.${key}=${options.lt}|${FirstUnicodeCharacter}`;
+    }
+    if (!options.lt && !options.lte) {
+      query.lte = `indexes.${key}=${LastUnicodeCharacter}`;
+    }
+    if (!options.gt && !options.gte) {
+      query.gte = `indexes.${key}=`;
+    }
+
+    for await (const ckey of db.keys(query)) {
       const [, lvalueAndKey] = ckey.split('=');
       const lvalue = lvalueAndKey.split('|')[0];
 
       if (fn(lvalue)) {
+        if (skipIndex < options.skip) {
+          skipIndex = skipIndex + 1;
+          continue;
+        }
+
         const id = await db.get(ckey);
         promises.push(read(id));
         if (type === 'find') {
+          break;
+        }
+
+        if (promises.length >= options.limit) {
           break;
         }
       }
@@ -187,16 +242,16 @@ async function createDoubleDb (dataDirectory) {
     }
   }
 
-  async function find (key, valueOrFunction) {
+  async function find (key, valueOrFunction, options) {
     return valueOrFunction instanceof Function
-      ? findOrFilterByFunction('find', key, valueOrFunction)
-      : findOrFilter('find', key, valueOrFunction);
+      ? findOrFilterByFunction('find', key, valueOrFunction, options)
+      : findOrFilter('find', key, valueOrFunction, options);
   }
 
-  async function filter (key, valueOrFunction) {
+  async function filter (key, valueOrFunction, options) {
     return valueOrFunction instanceof Function
-      ? findOrFilterByFunction('filter', key, valueOrFunction)
-      : findOrFilter('filter', key, valueOrFunction);
+      ? findOrFilterByFunction('filter', key, valueOrFunction, options)
+      : findOrFilter('filter', key, valueOrFunction, options);
   }
 
   async function remove (id) {

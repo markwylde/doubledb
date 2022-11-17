@@ -26,7 +26,6 @@ test('indexes - single level - stores correct indexes', async t => {
     indexes.push({ key, value });
   }
 
-  console.log('Stream ended');
   db.close();
 
   t.deepEqual(indexes, [

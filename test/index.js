@@ -3,6 +3,7 @@ import test from 'basictap';
 import createDoubleDb from '../index.js';
 
 await import('./indexes.js');
+await import('./functionFinds.js');
 
 test('find - top level key found - returns document', async t => {
   t.plan(1);
@@ -24,23 +25,23 @@ test('find - top level key found - returns document', async t => {
   });
 });
 
-test('find - top level key found by function - returns document', async t => {
+test('find - with skip', async t => {
   t.plan(1);
 
   await fs.rm('./testData', { recursive: true }).catch(() => {});
   const db = await createDoubleDb('./testData');
-  await db.insert({ id: 'id1', a: 'one' });
-  await db.insert({ id: 'id2', a: 'two' });
-  await db.insert({ id: 'id3', a: 'three' });
-  await db.insert({ id: 'id4', a: 'four' });
+  await db.insert({ id: 'id1', a: 1 });
+  await db.insert({ id: 'id2', a: 1 });
+  await db.insert({ id: 'id3', a: 1 });
+  await db.insert({ id: 'id4', a: 1 });
 
-  const findRecord = await db.find('a', v => v === 'two');
+  const findRecord = await db.find('a', 1, { skip: 2 });
 
   await db.close();
 
   t.deepEqual(findRecord, {
-    id: 'id2',
-    a: 'two'
+    id: 'id3',
+    a: 1
   });
 });
 
@@ -84,6 +85,52 @@ test('find - array top level key found - returns document', async t => {
     id: 'id1',
     a: [1, 2]
   });
+});
+
+test('filter - with skip', async t => {
+  t.plan(1);
+
+  await fs.rm('./testData', { recursive: true }).catch(() => {});
+  const db = await createDoubleDb('./testData');
+  await db.insert({ id: 'id1', a: 1 });
+  await db.insert({ id: 'id2', a: 1, b: 1 });
+  await db.insert({ id: 'id3', a: 1, b: 1 });
+  await db.insert({ id: 'id4', a: 1 });
+
+  const filterRecords = await db.filter('b', 1, { skip: 1 });
+
+  await db.close();
+
+  t.deepEqual(filterRecords, [
+    {
+      a: 1,
+      b: 1,
+      id: 'id3'
+    }
+  ]);
+});
+
+test('filter - with limit', async t => {
+  t.plan(1);
+
+  await fs.rm('./testData', { recursive: true }).catch(() => {});
+  const db = await createDoubleDb('./testData');
+  await db.insert({ id: 'id1', a: 1 });
+  await db.insert({ id: 'id2', a: 1, b: 1 });
+  await db.insert({ id: 'id3', a: 1, b: 1 });
+  await db.insert({ id: 'id4', a: 1 });
+
+  const filterRecords = await db.filter('b', 1, { limit: 1 });
+
+  await db.close();
+
+  t.deepEqual(filterRecords, [
+    {
+      a: 1,
+      b: 1,
+      id: 'id2'
+    }
+  ]);
 });
 
 test('filter - top level key found - returns documents', async t => {
