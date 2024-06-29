@@ -20,23 +20,43 @@ async function createDoubleDb (dataDirectory) {
 
   const db = new Level(dataDirectory);
 
-  async function addToIndexes (id, object, prefix = '') {
-    const promises = Object.keys(object).map(key => {
-      if (isObject(object[key])) {
-        addToIndexes(id, object[key], prefix + '.' + key);
-        return null;
-      }
+  async function addToIndexes(id, object, prefix = '') {
+    const promises = [];
 
-      if (Array.isArray(object[key])) {
-        for (const index in object[key]) {
-          db.put('indexes' + prefix + '.' + key + '=' + object[key][index] + '|' + id, id);
-        }
-        return null;
-      }
+    const addIndex = (key, value) => {
+      return db.put('indexes' + prefix + '.' + key + '=' + value + '|' + id, id);
+    };
 
-      db.put('indexes' + prefix + '.' + key + '=' + object[key] + '|' + id, id);
-      return null;
-    });
+    for (const [key, value] of Object.entries(object)) {
+      if (isObject(value)) {
+        promises.push(addToIndexes(id, value, prefix + '.' + key));
+      } else if (Array.isArray(value)) {
+        value.forEach(item => promises.push(addIndex(key, item)));
+      } else {
+        promises.push(addIndex(key, value));
+      }
+    }
+
+    return Promise.all(promises);
+  }
+
+  async function removeIndexesForDocument(id, document, prefix = '') {
+    const parsedDocument = typeof document === 'string' ? JSON.parse(document) : document;
+    const promises = [];
+
+    const removeIndex = (key, value) => {
+      return db.del('indexes' + prefix + '.' + key + '=' + value + '|' + id).catch(() => {});
+    };
+
+    for (const [key, value] of Object.entries(parsedDocument)) {
+      if (isObject(value)) {
+        promises.push(removeIndexesForDocument(id, value, prefix + '.' + key));
+      } else if (Array.isArray(value)) {
+        value.forEach(item => promises.push(removeIndex(key, item)));
+      } else {
+        promises.push(removeIndex(key, value));
+      }
+    }
 
     return Promise.all(promises);
   }
@@ -87,11 +107,15 @@ async function createDoubleDb (dataDirectory) {
       throw new Error(`doubledb.replace: document with id ${id} does not exist`);
     }
 
+    await removeIndexesForDocument(id, existingDocument);
+
     const puttableRecord = {
       ...newDocument,
       id
     };
     await db.put(id, JSON.stringify(puttableRecord));
+
+    await addToIndexes(id, puttableRecord);
 
     return puttableRecord;
   }
@@ -116,12 +140,16 @@ async function createDoubleDb (dataDirectory) {
       throw new Error(`doubledb.patch: document with id ${id} does not exist`);
     }
 
+    await removeIndexesForDocument(id, existingDocument);
+
     const puttableRecord = {
       ...JSON.parse(existingDocument),
       ...newDocument,
       id
     };
     await db.put(id, JSON.stringify(puttableRecord));
+
+    await addToIndexes(id, puttableRecord);
 
     return puttableRecord;
   }
@@ -265,6 +293,8 @@ async function createDoubleDb (dataDirectory) {
     if (!existingDocument) {
       throw new Error(`doubledb.remove: document with id ${id} does not exist`);
     }
+
+    await removeIndexesForDocument(id, existingDocument);
 
     return db.del(id);
   }
