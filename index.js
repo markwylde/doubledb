@@ -269,6 +269,68 @@ async function createDoubleDb (dataDirectory) {
     return db.del(id);
   }
 
+  function applyMqlOperators(operators, value) {
+    for (const operator in operators) {
+      const operatorValue = operators[operator];
+      switch (operator) {
+        case '$eq':
+          if (typeof value === 'string' && typeof operatorValue === 'string') {
+            if (value.toLowerCase() !== operatorValue.toLowerCase()) return false;
+          } else {
+            if (value !== operatorValue) return false;
+          }
+          break;
+        // Add other operators as needed
+        default:
+          throw new Error(`Unknown operator: ${operator}`);
+      }
+    }
+    return true;
+  }
+
+  async function applyQueryToResults(results, queryObject) {
+    const keys = Object.keys(queryObject);
+    let filteredResults = results;
+
+    for (const key of keys) {
+      const value = queryObject[key];
+      if (key === '$or') {
+        if (!Array.isArray(value)) {
+          throw new Error('doubledb.query: value for $or must be an array');
+        }
+        const orResults = await Promise.all(value.map(async subQuery => {
+          return await applyQueryToResults(filteredResults, subQuery);
+        }));
+        filteredResults = [...new Set([].concat(...orResults))];
+      } else if (key.startsWith('$')) {
+        throw new Error(`Unknown special operator: ${key}`);
+      } else {
+        const isOperator = isObject(value) && Object.keys(value).some(k => k.startsWith('$'));
+        if (isOperator) {
+          filteredResults = filteredResults.filter(
+            record => applyMqlOperators(value, record[key])
+          );
+        } else {
+          filteredResults = filteredResults.filter(record => record[key] === value);
+        }
+      }
+    }
+
+    return filteredResults;
+  }
+
+  async function query(queryObject) {
+    if (!isObject(queryObject)) {
+      throw new Error('doubledb.query: queryObject must be an object');
+    }
+
+    const allKeys = await db.keys({gte: '', lt: 'indexes.'}).all();
+    let results = await Promise.all(allKeys.map(key => read(key)));
+
+    results = await applyQueryToResults(results, queryObject);
+    return results;
+  }
+
   return {
     _level: db,
     find,
@@ -278,6 +340,7 @@ async function createDoubleDb (dataDirectory) {
     patch,
     remove,
     read,
+    query,
     close: db.close.bind(db)
   };
 }
