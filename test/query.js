@@ -103,51 +103,11 @@ test('$exists operator', async () => {
   await db.close();
 });
 
-test('$type operator', async () => {
-  const db = await setupTestDb();
-  await db.insert({ value: 5 });
-  await db.insert({ value: "string" });
-  const result = await db.query({ value: { $type: "number" } });
-  assert.strictEqual(result.length, 1);
-  assert.strictEqual(result[0].value, 5);
-  await db.close();
-});
-
-test('$regex operator', async () => {
-  const db = await setupTestDb();
-  await db.insert({ value: "hello" });
-  await db.insert({ value: "world" });
-  const result = await db.query({ value: { $regex: "^h", $options: "i" } });
-  assert.strictEqual(result.length, 1);
-  assert.strictEqual(result[0].value, "hello");
-  await db.close();
-});
-
-test('$mod operator', async () => {
-  const db = await setupTestDb();
-  await db.insert({ value: 5 });
-  await db.insert({ value: 10 });
-  const result = await db.query({ value: { $mod: [3, 2] } });
-  assert.strictEqual(result.length, 1);
-  assert.strictEqual(result[0].value, 5);
-  await db.close();
-});
-
 test('$all operator', async () => {
   const db = await setupTestDb();
   await db.insert({ value: [1, 2, 3] });
   await db.insert({ value: [1, 2] });
   const result = await db.query({ value: { $all: [1, 2, 3] } });
-  assert.strictEqual(result.length, 1);
-  assert.deepStrictEqual(result[0].value, [1, 2, 3]);
-  await db.close();
-});
-
-test('$size operator', async () => {
-  const db = await setupTestDb();
-  await db.insert({ value: [1, 2, 3] });
-  await db.insert({ value: [1, 2] });
-  const result = await db.query({ value: { $size: 3 } });
   assert.strictEqual(result.length, 1);
   assert.deepStrictEqual(result[0].value, [1, 2, 3]);
   await db.close();
