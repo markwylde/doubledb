@@ -299,118 +299,193 @@ async function createDoubleDb (dataDirectory) {
     return db.del(id);
   }
 
-  function applyMqlOperators(operators, value) {
-    for (const operator in operators) {
-      const operatorValue = operators[operator];
-      switch (operator) {
-        case '$eq':
-          if (value !== operatorValue) return false;
-          break;
-        case '$ne':
-          if (value === operatorValue) return false;
-          break;
-        case '$gt':
-          if (!(value > operatorValue)) return false;
-          break;
-        case '$gte':
-          if (!(value >= operatorValue)) return false;
-          break;
-        case '$lt':
-          if (!(value < operatorValue)) return false;
-          break;
-        case '$lte':
-          if (!(value <= operatorValue)) return false;
-          break;
-        case '$in':
-          if (!Array.isArray(operatorValue)) throw new Error('$in requires an array');
-          if (!operatorValue.includes(value)) return false;
-          break;
-        case '$nin':
-          if (!Array.isArray(operatorValue)) throw new Error('$nin requires an array');
-          if (operatorValue.includes(value)) return false;
-          break;
-        case '$exists':
-          if (operatorValue && value === undefined) return false;
-          if (!operatorValue && value !== undefined) return false;
-          break;
-        case '$type':
-          const type = Array.isArray(value) ? 'array' : typeof value;
-          if (type !== operatorValue) return false;
-          break;
-        case '$regex':
-          if (typeof value !== 'string') return false;
-          let flags = operators.$options || '';
-          let regex = new RegExp(operatorValue, flags);
-          if (!regex.test(value)) return false;
-          break;
-        case '$options':
-          // This is handled in $regex
-          break;
-        case '$mod':
-          if (!Array.isArray(operatorValue) || operatorValue.length !== 2) {
-            throw new Error('$mod requires an array of two numbers');
-          }
-          if (value % operatorValue[0] !== operatorValue[1]) return false;
-          break;
-        case '$all':
-          if (!Array.isArray(operatorValue)) throw new Error('$all requires an array');
-          if (!Array.isArray(value)) return false;
-          if (!operatorValue.every(item => value.includes(item))) return false;
-          break;
-        case '$size':
-          if (!Array.isArray(value) || value.length !== operatorValue) return false;
-          break;
-        case '$not':
-          if (applyMqlOperators(operatorValue, value)) return false;
-          break;
-        default:
-          throw new Error(`Unknown operator: ${operator}`);
-      }
-    }
-    return true;
-  }
-
-  async function applyQueryToResults(results, queryObject) {
-    const keys = Object.keys(queryObject);
-    let filteredResults = results;
-
-    for (const key of keys) {
-      const value = queryObject[key];
-      if (key === '$or') {
-        if (!Array.isArray(value)) {
-          throw new Error('doubledb.query: value for $or must be an array');
-        }
-        const orResults = await Promise.all(value.map(async subQuery => {
-          return await applyQueryToResults(filteredResults, subQuery);
-        }));
-        filteredResults = [...new Set([].concat(...orResults))];
-      } else if (key.startsWith('$')) {
-        throw new Error(`Unknown special operator: ${key}`);
-      } else {
-        const isOperator = isObject(value) && Object.keys(value).some(k => k.startsWith('$'));
-        if (isOperator) {
-          filteredResults = filteredResults.filter(
-            record => applyMqlOperators(value, record[key])
-          );
-        } else {
-          filteredResults = filteredResults.filter(record => record[key] === value);
-        }
-      }
-    }
-
-    return filteredResults;
-  }
-
   async function query(queryObject) {
     if (!isObject(queryObject)) {
       throw new Error('doubledb.query: queryObject must be an object');
     }
 
-    const allKeys = await db.keys({gte: '', lt: 'indexes.'}).all();
-    let results = await Promise.all(allKeys.map(key => read(key)));
+    let resultIds = new Set();
+    let isFirstCondition = true;
 
-    results = await applyQueryToResults(results, queryObject);
-    return results;
+    for (const [key, value] of Object.entries(queryObject)) {
+      if (key === '$or') {
+        const orResults = await Promise.all(value.map(subQuery => query(subQuery)));
+        const orIds = new Set(orResults.flat().map(doc => doc.id));
+        resultIds = isFirstCondition ? orIds : new Set([...resultIds].filter(id => orIds.has(id)));
+      } else if (key.startsWith('$')) {
+        throw new Error(`Unsupported top-level operator: ${key}`);
+      } else {
+        let ids;
+        if (isObject(value) && Object.keys(value).some(k => k.startsWith('$'))) {
+          ids = await handleOperators(key, value);
+        } else {
+          ids = await getIdsForKeyValue(key, value);
+        }
+        resultIds = isFirstCondition ? ids : new Set([...resultIds].filter(id => ids.has(id)));
+      }
+      isFirstCondition = false;
+    }
+
+    const results = await Promise.all([...resultIds].map(id => read(id)));
+    return results.filter(doc => doc !== undefined);
+  }
+
+  async function handleOperators(key, operators) {
+    let resultIds = new Set();
+    let isFirstOperator = true;
+
+    for (const [op, value] of Object.entries(operators)) {
+      let ids;
+      switch (op) {
+        case '$eq':
+          ids = await getIdsForKeyValue(key, value);
+          break;
+        case '$ne':
+          ids = await getIdsForKeyValueNot(key, value);
+          break;
+        case '$gt':
+        case '$gte':
+        case '$lt':
+        case '$lte':
+          ids = await getIdsForKeyValueRange(key, op, value);
+          break;
+        case '$in':
+          ids = await getIdsForKeyValueIn(key, value);
+          break;
+        case '$nin':
+          ids = await getIdsForKeyValueNotIn(key, value);
+          break;
+        case '$all':
+          ids = await getIdsForKeyValueAll(key, value);
+          break;
+        case '$exists':
+          ids = await getIdsForKeyExists(key, value);
+          break;
+        case '$not':
+          ids = await handleOperators(key, value);
+          ids = await getAllIdsExcept(ids);
+          break;
+        default:
+          // For unsupported operators, fall back to filtering all documents
+          return getAllIds();
+      }
+      resultIds = isFirstOperator ? ids : new Set([...resultIds].filter(id => ids.has(id)));
+      isFirstOperator = false;
+    }
+
+    return resultIds;
+  }
+
+  async function getIdsForKeyValue(key, value) {
+    const ids = new Set();
+    for await (const ckey of db.keys({
+      gte: `indexes.${key}=${value}|`,
+      lte: `indexes.${key}=${value}|${LastUnicodeCharacter}`
+    })) {
+      const id = await db.get(ckey);
+      ids.add(id);
+    }
+    return ids;
+  }
+
+  async function getIdsForKeyValueNot(key, value) {
+    const allIds = await getAllIds();
+    const idsToExclude = await getIdsForKeyValue(key, value);
+    return new Set([...allIds].filter(id => !idsToExclude.has(id)));
+  }
+
+  async function getIdsForKeyValueRange(key, op, value) {
+    const ids = new Set();
+    const query = {
+      gte: `indexes.${key}=`,
+      lte: `indexes.${key}=${LastUnicodeCharacter}`
+    };
+
+    for await (const ckey of db.keys(query)) {
+      const [, lvalueAndKey] = ckey.split('=');
+      const lvalue = lvalueAndKey.split('|')[0];
+      const numericLvalue = Number(lvalue);
+
+      if (!isNaN(numericLvalue)) {
+        if ((op === '$gt' && numericLvalue > value) ||
+            (op === '$gte' && numericLvalue >= value) ||
+            (op === '$lt' && numericLvalue < value) ||
+            (op === '$lte' && numericLvalue <= value)) {
+          const id = await db.get(ckey);
+          ids.add(id);
+        }
+      }
+    }
+    return ids;
+  }
+
+  async function getIdsForKeyValueIn(key, values) {
+    const ids = new Set();
+    for (const value of values) {
+      const valueIds = await getIdsForKeyValue(key, value);
+      valueIds.forEach(id => ids.add(id));
+    }
+    return ids;
+  }
+
+  async function getIdsForKeyValueAll(key, values) {
+    const ids = new Set();
+    const allValues = new Set(values);
+
+    for await (const ckey of db.keys({
+      gte: `indexes.${key}=`,
+      lte: `indexes.${key}=${LastUnicodeCharacter}`
+    })) {
+      const [, lvalueAndKey] = ckey.split('=');
+      const lvalue = lvalueAndKey.split('|')[0];
+      const id = await db.get(ckey);
+
+      if (!ids.has(id)) {
+        const document = await read(id);
+        const documentValues = document[key];
+        if (Array.isArray(documentValues) && values.every(value => documentValues.includes(value))) {
+          ids.add(id);
+        }
+      }
+    }
+
+    return ids;
+  }
+
+  async function getIdsForKeyValueNotIn(key, values) {
+    const allIds = await getAllIds();
+    const idsToExclude = await getIdsForKeyValueIn(key, values);
+    return new Set([...allIds].filter(id => !idsToExclude.has(id)));
+  }
+
+  async function getIdsForKeyExists(key, shouldExist) {
+    const ids = new Set();
+    const query = {
+      gte: `indexes.${key}=`,
+      lt: `indexes.${key}=${LastUnicodeCharacter}`
+    };
+    for await (const ckey of db.keys(query)) {
+      const id = await db.get(ckey);
+      ids.add(id);
+    }
+    if (!shouldExist) {
+      const allIds = await getAllIds();
+      return new Set([...allIds].filter(id => !ids.has(id)));
+    }
+    return ids;
+  }
+
+  async function getAllIds() {
+    const ids = new Set();
+    for await (const key of db.keys({gte: '', lt: 'indexes'})) {
+      ids.add(key);
+    }
+    return ids;
+  }
+
+  async function getAllIdsExcept(excludeIds) {
+    const allIds = await getAllIds();
+    return new Set([...allIds].filter(id => !excludeIds.has(id)));
   }
 
   return {
