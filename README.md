@@ -1,8 +1,4 @@
 # doubledb
-![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/markwylde/doubledb?style=flat-square)
-[![GitHub package.json version](https://img.shields.io/github/package-json/v/markwylde/doubledb?style=flat-square)](https://github.com/markwylde/doubledb/blob/master/package.json)
-[![GitHub](https://img.shields.io/github/license/markwylde/doubledb?style=flat-square)](https://github.com/markwylde/doubledb/blob/master/LICENSE)
-[![js-semistandard-style](https://img.shields.io/badge/code%20style-semistandard-brightgreen.svg?style=flat-square)](https://github.com/standard/semistandard)
 
 An on disk database that indexes everything for fast querying.
 
@@ -11,21 +7,10 @@ An on disk database that indexes everything for fast querying.
 npm install --save doubledb
 ```
 
-## Features
-- [x]  read
-- [x]  insert
-- [x]  replace
-- [x]  patch
-- [x]  remove
-- [x]  find
-- [x]  filter
-- [x]  query (not optimized)
-- [ ]  query (optimized with indexes)
-
 ## Usage
 ```javascript
 import createDoubledb from 'doubledb';
-const doubledb = createDoubledb('./data');
+const doubledb = await createDoubledb('./data');
 
 doubledb.insert({
   id: undefined, // defaults to uuid, must be unique
@@ -146,25 +131,60 @@ The final record will be:
 ```
 
 ### `.remove(key)`
-Completely remove the key and it's value from the database.
+Query the database using a complex query object. This method allows for advanced querying using a combination of fields and operators.
 
-### Query
-This has been implemented but it is very inefficient right now, as it doesn't use indexes. Inside, it iteratives over all keys then matches the operators.
+### `.query(queryObject)`
+Query the database using a complex query object. This method allows for advanced querying using a combination of fields and operators.
 
-Supported operators can be found in the [applyMqlOperators](./index.js#L302) function.
-
+**Example:**
 ```javascript
-const record = doubledb.query({
+const records = await doubledb.query({
   location: 'London',
   category: 'b',
-
-  $or: {
-    firstName: {
-      $eq: 'Joe',
-    },
-    firstName: {
-      $eq: 'joe',
-    }
-  }
-})
+  $or: [
+    { firstName: { $eq: 'Joe' } },
+    { firstName: { $eq: 'joe' } }
+  ]
+});
 ```
+
+The `queryObject` can contain various fields and operators to filter the records. The following operators are supported:
+
+#### Operators:
+- `$eq`: Equal to a value.
+- `$ne`: Not equal to a value.
+- `$gt`: Greater than a value.
+- `$gte`: Greater than or equal to a value.
+- `$lt`: Less than a value.
+- `$lte`: Less than or equal to a value.
+- `$in`: Value is in the provided array.
+- `$nin`: Value is not in the provided array.
+- `$all`: Array contains all the provided values.
+- `$exists`: Field exists or does not exist.
+- `$not`: Negates the condition.
+
+**Example Usage of Operators:**
+```javascript
+const records = await doubledb.query({
+  age: { $gte: 18, $lt: 30 },
+  status: { $in: ['active', 'pending'] },
+  $or: [
+    { role: { $eq: 'admin' } },
+    { role: { $eq: 'user' } }
+  ],
+  preferences: { $exists: true }
+});
+```
+
+### How Operators Work:
+- **$eq**: Matches documents where the field is equal to the specified value.
+- **$ne**: Matches documents where the field is not equal to the specified value.
+- **$gt / $gte**: Matches documents where the field is greater than (or greater than or equal to) the specified value.
+- **$lt / $lte**: Matches documents where the field is less than (or less than or equal to) the specified value.
+- **$in**: Matches documents where the field value is in the specified array.
+- **$nin**: Matches documents where the field value is not in the specified array.
+- **$all**: Matches documents where the array field contains all the specified values.
+- **$exists**: Matches documents where the field exists (or does not exist if set to false).
+- **$not**: Matches documents that do not match the specified condition.
+
+This query method is powerful and allows combining multiple conditions and operators to fetch the desired records from the database.
