@@ -5,7 +5,7 @@
   "description": "An on disk database that indexes everything for fast querying.",
   "main": "index.js",
   "scripts": {
-    "test": "c8 node --unhandled-rejections=strict test"
+    "test": "c8 node --test"
   },
   "repository": {
     "type": "git",
@@ -31,7 +31,6 @@
   },
   "homepage": "https://github.com/markwylde/doubledb#readme",
   "devDependencies": {
-    "basictap": "^4.3.5",
     "c8": "^10.1.2",
     "semistandard": "^17.0.0"
   },

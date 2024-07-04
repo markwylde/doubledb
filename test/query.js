@@ -1,43 +1,51 @@
 import { promises as fs } from 'fs';
-import test from 'basictap';
+import test from 'node:test';
+import assert from 'node:assert';
 import createDoubleDb from '../index.js';
 
-test('query - found', async t => {
-  t.plan(1);
+const testDir = './testData-' + Math.random();
 
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test.after(async () => {
+  fs.rm(testDir, { recursive: true, force: true });
+});
 
-  await db.insert({
-    category: 'a',
-    firstName: 'Joe'
-  });
-  await db.insert({
-    category: 'b',
-    firstName: 'Nope'
-  });
-  const insertedRecord3 = await db.insert({
-    category: 'b',
-    firstName: 'Joe'
-  });
-  const queryResult = await db.query({
-    category: 'b',
-    $or: [{
-      firstName: {
-        $eq: 'Joe',
-      },
-    }, {
-      firstName: {
-        $eq: 'joe',
-      }
-    }]
-  });
+test('query - found', async (t) => {
+  await t.test('query operation', async () => {
+    await fs.rm(testDir, { recursive: true }).catch(() => {});
+    const db = await createDoubleDb(testDir);
 
-  t.deepEqual(queryResult, [{
-    id: insertedRecord3.id,
-    category: 'b',
-    firstName: 'Joe'
-  }]);
+    await db.insert({
+      category: 'a',
+      firstName: 'Joe'
+    });
+    await db.insert({
+      category: 'b',
+      firstName: 'Nope'
+    });
+    const insertedRecord3 = await db.insert({
+      category: 'b',
+      firstName: 'Joe'
+    });
 
-  return () => db.close();
+    const queryResult = await db.query({
+      category: 'b',
+      $or: [{
+        firstName: {
+          $eq: 'Joe',
+        },
+      }, {
+        firstName: {
+          $eq: 'joe',
+        }
+      }]
+    });
+
+    assert.deepStrictEqual(queryResult, [{
+      id: insertedRecord3.id,
+      category: 'b',
+      firstName: 'Joe'
+    }]);
+
+    await db.close();
+  });
 });

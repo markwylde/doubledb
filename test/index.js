@@ -1,16 +1,17 @@
-import { promises as fs } from 'fs';
-import test from 'basictap';
+import { promises as fs } from 'node:fs';
+import { test } from 'node:test';
+import assert from 'node:assert';
 import createDoubleDb from '../index.js';
 
-await import('./query.js');
-await import('./indexes.js');
-await import('./functionFinds.js');
+const testDir = './testData-' + Math.random();
 
-test('find - top level key found - returns document', async t => {
-  t.plan(1);
+test.after(async () => {
+  fs.rm(testDir, { recursive: true, force: true });
+});
 
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('find - top level key found - returns document', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   await db.insert({ id: 'id1', a: 1 });
   await db.insert({ id: 'id2', a: 2 });
   await db.insert({ id: 'id3', a: 3 });
@@ -20,17 +21,15 @@ test('find - top level key found - returns document', async t => {
 
   await db.close();
 
-  t.deepEqual(findRecord, {
+  assert.deepStrictEqual(findRecord, {
     id: 'id2',
     a: 2
   });
 });
 
-test('find - with skip', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('find - with skip', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   await db.insert({ id: 'id1', a: 1 });
   await db.insert({ id: 'id2', a: 1 });
   await db.insert({ id: 'id3', a: 1 });
@@ -40,17 +39,15 @@ test('find - with skip', async t => {
 
   await db.close();
 
-  t.deepEqual(findRecord, {
+  assert.deepStrictEqual(findRecord, {
     id: 'id3',
     a: 1
   });
 });
 
-test('find - nested key found - returns document', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('find - nested key found - returns document', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   await db.insert({ id: 'id1', a: { b: 1 } });
   await db.insert({ id: 'id2', a: { b: 2 } });
   await db.insert({ id: 'id3', a: { b: 3 } });
@@ -60,7 +57,7 @@ test('find - nested key found - returns document', async t => {
 
   await db.close();
 
-  t.deepEqual(findRecord, {
+  assert.deepStrictEqual(findRecord, {
     id: 'id2',
     a: {
       b: 2
@@ -68,11 +65,9 @@ test('find - nested key found - returns document', async t => {
   });
 });
 
-test('find - array top level key found - returns document', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('find - array top level key found - returns document', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   await db.insert({ id: 'id1', a: [1, 2] });
   await db.insert({ id: 'id2', a: [2, 3] });
   await db.insert({ id: 'id3', a: [3, 4] });
@@ -82,17 +77,15 @@ test('find - array top level key found - returns document', async t => {
 
   await db.close();
 
-  t.deepEqual(findRecord, {
+  assert.deepStrictEqual(findRecord, {
     id: 'id1',
     a: [1, 2]
   });
 });
 
-test('filter - with skip', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('filter - with skip', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   await db.insert({ id: 'id1', a: 1 });
   await db.insert({ id: 'id2', a: 1, b: 1 });
   await db.insert({ id: 'id3', a: 1, b: 1 });
@@ -102,7 +95,7 @@ test('filter - with skip', async t => {
 
   await db.close();
 
-  t.deepEqual(filterRecords, [
+  assert.deepStrictEqual(filterRecords, [
     {
       a: 1,
       b: 1,
@@ -111,11 +104,9 @@ test('filter - with skip', async t => {
   ]);
 });
 
-test('filter - with limit', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('filter - with limit', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   await db.insert({ id: 'id1', a: 1 });
   await db.insert({ id: 'id2', a: 1, b: 1 });
   await db.insert({ id: 'id3', a: 1, b: 1 });
@@ -125,7 +116,7 @@ test('filter - with limit', async t => {
 
   await db.close();
 
-  t.deepEqual(filterRecords, [
+  assert.deepStrictEqual(filterRecords, [
     {
       a: 1,
       b: 1,
@@ -134,11 +125,9 @@ test('filter - with limit', async t => {
   ]);
 });
 
-test('filter - top level key found - returns documents', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('filter - top level key found - returns documents', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   await db.insert({ id: 'id1', a: 1 });
   await db.insert({ id: 'id2', a: 2, b: 1 });
   await db.insert({ id: 'id3', a: 2, b: 2 });
@@ -148,7 +137,7 @@ test('filter - top level key found - returns documents', async t => {
 
   await db.close();
 
-  t.deepEqual(filterRecords, [
+  assert.deepStrictEqual(filterRecords, [
     {
       a: 2,
       b: 1,
@@ -162,36 +151,30 @@ test('filter - top level key found - returns documents', async t => {
   ]);
 });
 
-test('read - no id supplied - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('read - no id supplied - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
 
   try {
     await db.read();
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'Key cannot be null or undefined');
+    assert.strictEqual(error.message, 'Key cannot be null or undefined');
   }
 });
 
-test('read - not found - returns undefined', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('read - not found - returns undefined', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   const readRecord = await db.read('nothing in here');
   await db.close();
 
-  t.equal(readRecord, undefined);
+  assert.strictEqual(readRecord, undefined);
 });
 
-test('read - found - returns document', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('read - found - returns document', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   const insertedRecord = await db.insert({
     a: 1
   });
@@ -200,14 +183,12 @@ test('read - found - returns document', async t => {
 
   await db.close();
 
-  t.equal(readRecord.a, 1);
+  assert.strictEqual(readRecord.a, 1);
 });
 
-test('create - existing key - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('create - existing key - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   await db.insert({
     id: 'myid',
     a: 1
@@ -219,87 +200,75 @@ test('create - existing key - throws', async t => {
       a: 1
     });
   } catch (error) {
-    t.equal(error.message, 'doubledb.insert: document with id myid already exists');
+    assert.strictEqual(error.message, 'doubledb.insert: document with id myid already exists');
   }
 
   await db.close();
 });
 
-test('create - missing arguments - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('create - missing arguments - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
 
   try {
     await db.insert();
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'doubledb.insert: no document was supplied to insert function');
+    assert.strictEqual(error.message, 'doubledb.insert: no document was supplied to insert function');
   }
 });
 
-test('replace - missing id argument - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('replace - missing id argument - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
 
   try {
     await db.replace(null);
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'doubledb.replace: no id was supplied to replace function');
+    assert.strictEqual(error.message, 'doubledb.replace: no id was supplied to replace function');
   }
 });
 
-test('replace - missing newDocument argument - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('replace - missing newDocument argument - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
 
   try {
     await db.replace(1);
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'doubledb.replace: no newDocument was supplied to replace function');
+    assert.strictEqual(error.message, 'doubledb.replace: no newDocument was supplied to replace function');
   }
 });
 
-test('replace - none matching id and newDocument.id - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('replace - none matching id and newDocument.id - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
 
   try {
     await db.replace(1, { id: 2 });
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'doubledb.replace: the id (1) and newDocument.id (2) must be the same, or not defined');
+    assert.strictEqual(error.message, 'doubledb.replace: the id (1) and newDocument.id (2) must be the same, or not defined');
   }
 });
 
-test('replace - not found - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('replace - not found - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
 
   try {
     await db.replace(1, { a: 1 });
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'doubledb.replace: document with id 1 does not exist');
+    assert.strictEqual(error.message, 'doubledb.replace: document with id 1 does not exist');
   }
 });
 
-test('replace - found - returns new document', async t => {
-  t.plan(3);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('replace - found - returns new document', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   const insertedRecord = await db.insert({
     a: 1
   });
@@ -312,72 +281,62 @@ test('replace - found - returns new document', async t => {
 
   await db.close();
 
-  t.equal(updatedRecord.id, insertedRecord.id);
-  t.equal(updatedRecord.a, 2);
-  t.equal(readRecord.a, 2);
+  assert.strictEqual(updatedRecord.id, insertedRecord.id);
+  assert.strictEqual(updatedRecord.a, 2);
+  assert.strictEqual(readRecord.a, 2);
 });
 
-test('patch - missing id argument - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('patch - missing id argument - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
 
   try {
     await db.patch(null);
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'doubledb.patch: no id was supplied to patch function');
+    assert.strictEqual(error.message, 'doubledb.patch: no id was supplied to patch function');
   }
 });
 
-test('patch - missing newDocument argument - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('patch - missing newDocument argument - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
 
   try {
     await db.patch(1);
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'doubledb.patch: no newDocument was supplied to patch function');
+    assert.strictEqual(error.message, 'doubledb.patch: no newDocument was supplied to patch function');
   }
 });
 
-test('patch - none matching id and newDocument.id - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('patch - none matching id and newDocument.id - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
 
   try {
     await db.patch(1, { id: 2 });
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'doubledb.patch: the id (1) and newDocument.id (2) must be the same, or not defined');
+    assert.strictEqual(error.message, 'doubledb.patch: the id (1) and newDocument.id (2) must be the same, or not defined');
   }
 });
 
-test('patch - not found - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('patch - not found - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
 
   try {
     await db.patch(1, { a: 1 });
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'doubledb.patch: document with id 1 does not exist');
+    assert.strictEqual(error.message, 'doubledb.patch: document with id 1 does not exist');
   }
 });
 
-test('patch - found - returns patched document', async t => {
-  t.plan(2);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('patch - found - returns patched document', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   const insertedRecord = await db.insert({
     a: 1,
     b: 2
@@ -392,14 +351,14 @@ test('patch - found - returns patched document', async t => {
 
   await db.close();
 
-  t.deepEqual(updatedRecord, {
+  assert.deepStrictEqual(updatedRecord, {
     id: insertedRecord.id,
     a: 1,
     b: 3,
     c: 4
   });
 
-  t.deepEqual(readRecord, {
+  assert.deepStrictEqual(readRecord, {
     id: insertedRecord.id,
     a: 1,
     b: 3,
@@ -407,39 +366,33 @@ test('patch - found - returns patched document', async t => {
   });
 });
 
-test('remove - missing id argument - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('remove - missing id argument - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
 
   try {
     await db.remove(null);
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'doubledb.remove: no id was supplied to replace function');
+    assert.strictEqual(error.message, 'doubledb.remove: no id was supplied to replace function');
   }
 });
 
-test('remove - not found - throws', async t => {
-  t.plan(1);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('remove - not found - throws', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
 
   try {
     await db.remove('nothing');
   } catch (error) {
     await db.close();
-    t.equal(error.message, 'doubledb.remove: document with id nothing does not exist');
+    assert.strictEqual(error.message, 'doubledb.remove: document with id nothing does not exist');
   }
 });
 
-test('remove - found - removes document', async t => {
-  t.plan(3);
-
-  await fs.rm('./testData', { recursive: true }).catch(() => {});
-  const db = await createDoubleDb('./testData');
+test('remove - found - removes document', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
   const insertedRecord = await db.insert({
     a: 1
   });
@@ -449,9 +402,7 @@ test('remove - found - removes document', async t => {
 
   await db.close();
 
-  t.equal(readBefore.id, insertedRecord.id);
-  t.equal(readAfter, undefined);
-  t.equal(removeResult, undefined);
+  assert.strictEqual(readBefore.id, insertedRecord.id);
+  assert.strictEqual(readAfter, undefined);
+  assert.strictEqual(removeResult, undefined);
 });
-
-test.trigger();
