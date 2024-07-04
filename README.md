@@ -151,7 +151,7 @@ Completely remove the key and it's value from the database.
 ### Query
 This has been implemented but it is very inefficient right now, as it doesn't use indexes. Inside, it iteratives over all keys then matches the operators.
 
-Supported operators can be found in the [applyMqlOperators](index.js:302) function.
+Supported operators can be found in the [applyMqlOperators](./index.js#L302) function.
 
 ```javascript
 const record = doubledb.query({
