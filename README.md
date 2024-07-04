@@ -19,7 +19,8 @@ npm install --save doubledb
 - [x]  remove
 - [x]  find
 - [x]  filter
-- [ ]  query
+- [x]  query (not optimized)
+- [ ]  query (optimized with indexes)
 
 ## Usage
 ```javascript
@@ -147,8 +148,10 @@ The final record will be:
 ### `.remove(key)`
 Completely remove the key and it's value from the database.
 
-### Proposed Query
-This hasn't been implemented yet, but it's something I'd like and think could work.
+### Query
+This has been implemented but it is very inefficient right now, as it doesn't use indexes. Inside, it iteratives over all keys then matches the operators.
+
+Supported operators can be found in the [applyMqlOperators](index.js:302) function.
 
 ```javascript
 const record = doubledb.query({

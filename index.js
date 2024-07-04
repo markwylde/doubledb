@@ -304,13 +304,65 @@ async function createDoubleDb (dataDirectory) {
       const operatorValue = operators[operator];
       switch (operator) {
         case '$eq':
-          if (typeof value === 'string' && typeof operatorValue === 'string') {
-            if (value.toLowerCase() !== operatorValue.toLowerCase()) return false;
-          } else {
-            if (value !== operatorValue) return false;
-          }
+          if (value !== operatorValue) return false;
           break;
-        // Add other operators as needed
+        case '$ne':
+          if (value === operatorValue) return false;
+          break;
+        case '$gt':
+          if (!(value > operatorValue)) return false;
+          break;
+        case '$gte':
+          if (!(value >= operatorValue)) return false;
+          break;
+        case '$lt':
+          if (!(value < operatorValue)) return false;
+          break;
+        case '$lte':
+          if (!(value <= operatorValue)) return false;
+          break;
+        case '$in':
+          if (!Array.isArray(operatorValue)) throw new Error('$in requires an array');
+          if (!operatorValue.includes(value)) return false;
+          break;
+        case '$nin':
+          if (!Array.isArray(operatorValue)) throw new Error('$nin requires an array');
+          if (operatorValue.includes(value)) return false;
+          break;
+        case '$exists':
+          if (operatorValue && value === undefined) return false;
+          if (!operatorValue && value !== undefined) return false;
+          break;
+        case '$type':
+          const type = Array.isArray(value) ? 'array' : typeof value;
+          if (type !== operatorValue) return false;
+          break;
+        case '$regex':
+          if (typeof value !== 'string') return false;
+          let flags = operators.$options || '';
+          let regex = new RegExp(operatorValue, flags);
+          if (!regex.test(value)) return false;
+          break;
+        case '$options':
+          // This is handled in $regex
+          break;
+        case '$mod':
+          if (!Array.isArray(operatorValue) || operatorValue.length !== 2) {
+            throw new Error('$mod requires an array of two numbers');
+          }
+          if (value % operatorValue[0] !== operatorValue[1]) return false;
+          break;
+        case '$all':
+          if (!Array.isArray(operatorValue)) throw new Error('$all requires an array');
+          if (!Array.isArray(value)) return false;
+          if (!operatorValue.every(item => value.includes(item))) return false;
+          break;
+        case '$size':
+          if (!Array.isArray(value) || value.length !== operatorValue) return false;
+          break;
+        case '$not':
+          if (applyMqlOperators(operatorValue, value)) return false;
+          break;
         default:
           throw new Error(`Unknown operator: ${operator}`);
       }
