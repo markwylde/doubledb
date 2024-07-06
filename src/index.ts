@@ -5,25 +5,51 @@ import { v4 as uuid } from 'uuid';
 export const FirstUnicodeCharacter = '\u{0000}';
 export const LastUnicodeCharacter = '\u{10FFFF}';
 
-function notFoundToUndefined (error) {
-  if (error.code === 'LEVEL_NOT_FOUND') {
-    return;
-  }
+type Document = {
+  id?: string;
+  [key: string]: any;
+}
 
+type QueryOptions = {
+  skip?: number;
+  limit?: number;
+  gt?: string;
+  lt?: string;
+  lte?: string;
+  gte?: string;
+}
+
+export type DoubleDb = {
+  _level: Level<string, string>;
+  find: (key: string, valueOrFunction: any, options?: QueryOptions) => Promise<Document | undefined>;
+  filter: (key: string, valueOrFunction: any, options?: QueryOptions) => Promise<Document[]>;
+  insert: (document: Document) => Promise<Document>;
+  replace: (id: string, newDocument: Document) => Promise<Document>;
+  patch: (id: string, newDocument: Partial<Document>) => Promise<Document>;
+  remove: (id: string) => Promise<void>;
+  read: (id: string) => Promise<Document | undefined>;
+  query: (queryObject: object) => Promise<Document[]>;
+  close: () => Promise<void>;
+}
+
+function notFoundToUndefined(error: Error & { code?: string }): undefined {
+  if (error.code === 'LEVEL_NOT_FOUND') {
+    return undefined;
+  }
   throw error;
 }
 
-const isObject = thing => thing instanceof Object && !Array.isArray(thing);
+const isObject = (thing: any): thing is object => thing instanceof Object && !Array.isArray(thing);
 
-async function createDoubleDb (dataDirectory) {
+async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
   await fs.mkdir(dataDirectory, { recursive: true });
 
-  const db = new Level(dataDirectory);
+  const db = new Level<string, string>(dataDirectory);
 
-  async function addToIndexes(id, object, prefix = '') {
-    const promises = [];
+  async function addToIndexes(id: string, object: object, prefix: string = ''): Promise<void> {
+    const promises: Promise<void>[] = [];
 
-    const addIndex = (key, value) => {
+    const addIndex = (key: string, value: any): Promise<void> => {
       return db.put('indexes' + prefix + '.' + key + '=' + value + '|' + id, id);
     };
 
@@ -37,14 +63,14 @@ async function createDoubleDb (dataDirectory) {
       }
     }
 
-    return Promise.all(promises);
+    await Promise.all(promises);
   }
 
-  async function removeIndexesForDocument(id, document, prefix = '') {
+  async function removeIndexesForDocument(id: string, document: string | object, prefix: string = ''): Promise<void> {
     const parsedDocument = typeof document === 'string' ? JSON.parse(document) : document;
-    const promises = [];
+    const promises: Promise<void>[] = [];
 
-    const removeIndex = (key, value) => {
+    const removeIndex = (key: string, value: any): Promise<void> => {
       return db.del('indexes' + prefix + '.' + key + '=' + value + '|' + id).catch(() => {});
     };
 
@@ -58,10 +84,10 @@ async function createDoubleDb (dataDirectory) {
       }
     }
 
-    return Promise.all(promises);
+    await Promise.all(promises);
   }
 
-  async function insert (document) {
+  async function insert(document: Document): Promise<Document> {
     if (!document) {
       throw new Error('doubledb.insert: no document was supplied to insert function');
     }
@@ -87,7 +113,7 @@ async function createDoubleDb (dataDirectory) {
     return puttableRecord;
   }
 
-  async function replace (id, newDocument) {
+  async function replace(id: string, newDocument: Document): Promise<Document> {
     if (!id) {
       throw new Error('doubledb.replace: no id was supplied to replace function');
     }
@@ -120,7 +146,7 @@ async function createDoubleDb (dataDirectory) {
     return puttableRecord;
   }
 
-  async function patch (id, newDocument) {
+  async function patch(id: string, newDocument: Partial<Document>): Promise<Document> {
     if (!id) {
       throw new Error('doubledb.patch: no id was supplied to patch function');
     }
@@ -154,24 +180,24 @@ async function createDoubleDb (dataDirectory) {
     return puttableRecord;
   }
 
-  async function read (id) {
+  async function read(id: string): Promise<Document | undefined> {
     const document = await db.get(id)
       .catch(notFoundToUndefined);
 
     if (!document) {
-      return;
+      return undefined;
     }
 
     return JSON.parse(document);
   }
 
-  async function findOrFilter (type, key, value, options) {
+  async function findOrFilter(type: 'find' | 'filter', key: string, value: any, options?: QueryOptions): Promise<Document | Document[] | undefined> {
     options = {
       skip: 0,
       limit: type === 'find' ? 1 : Infinity,
       ...options
     };
-    const promises = [];
+    const promises: Promise<Document | undefined>[] = [];
     let skipIndex = 0;
     for await (const ckey of db.keys({
       gt: `indexes.${key}=${value}|`,
@@ -181,7 +207,7 @@ async function createDoubleDb (dataDirectory) {
       const lvalue = lvalueAndKey.split('|')[0];
 
       if (lvalue == value) {
-        if (skipIndex < options.skip) {
+        if (skipIndex < options.skip!) {
           skipIndex = skipIndex + 1;
           continue;
         }
@@ -192,7 +218,7 @@ async function createDoubleDb (dataDirectory) {
           break;
         }
 
-        if (promises.length >= options.limit) {
+        if (promises.length >= options.limit!) {
           break;
         }
       }
@@ -200,13 +226,13 @@ async function createDoubleDb (dataDirectory) {
 
     const results = await Promise.all(promises);
     if (type === 'filter') {
-      return results;
+      return results.filter((doc): doc is Document => doc !== undefined);
     } else {
       return results[0];
     }
   }
 
-  async function findOrFilterByFunction (type, key, fn, options) {
+  async function findOrFilterByFunction(type: 'find' | 'filter', key: string, fn: (value: any) => boolean, options?: QueryOptions): Promise<Document | Document[] | undefined> {
     options = {
       skip: 0,
       limit: type === 'find' ? 1 : Infinity,
@@ -216,10 +242,10 @@ async function createDoubleDb (dataDirectory) {
       gte: options?.gte,
       ...options
     };
-    const promises = [];
+    const promises: Promise<Document | undefined>[] = [];
     let skipIndex = 0;
 
-    const query = {};
+    const query: { [key: string]: string } = {};
 
     if (options.gte) {
       query.gte = `indexes.${key}=${options.gte}`;
@@ -245,7 +271,7 @@ async function createDoubleDb (dataDirectory) {
       const lvalue = lvalueAndKey.split('|')[0];
 
       if (fn(lvalue)) {
-        if (skipIndex < options.skip) {
+        if (skipIndex < options.skip!) {
           skipIndex = skipIndex + 1;
           continue;
         }
@@ -256,7 +282,7 @@ async function createDoubleDb (dataDirectory) {
           break;
         }
 
-        if (promises.length >= options.limit) {
+        if (promises.length >= options.limit!) {
           break;
         }
       }
@@ -264,25 +290,25 @@ async function createDoubleDb (dataDirectory) {
 
     const results = await Promise.all(promises);
     if (type === 'filter') {
-      return results;
+      return results.filter((doc): doc is Document => doc !== undefined);
     } else {
       return results[0];
     }
   }
 
-  async function find (key, valueOrFunction, options) {
+  async function find(key: string, valueOrFunction: any, options?: QueryOptions): Promise<Document | undefined> {
     return valueOrFunction instanceof Function
-      ? findOrFilterByFunction('find', key, valueOrFunction, options)
-      : findOrFilter('find', key, valueOrFunction, options);
+      ? findOrFilterByFunction('find', key, valueOrFunction, options) as Promise<Document | undefined>
+      : findOrFilter('find', key, valueOrFunction, options) as Promise<Document | undefined>;
   }
 
-  async function filter (key, valueOrFunction, options) {
+  async function filter(key: string, valueOrFunction: any, options?: QueryOptions): Promise<Document[]> {
     return valueOrFunction instanceof Function
-      ? findOrFilterByFunction('filter', key, valueOrFunction, options)
-      : findOrFilter('filter', key, valueOrFunction, options);
+      ? findOrFilterByFunction('filter', key, valueOrFunction, options) as Promise<Document[]>
+      : findOrFilter('filter', key, valueOrFunction, options) as Promise<Document[]>;
   }
 
-  async function remove (id) {
+  async function remove(id: string): Promise<void> {
     if (!id) {
       throw new Error('doubledb.remove: no id was supplied to replace function');
     }
@@ -299,17 +325,17 @@ async function createDoubleDb (dataDirectory) {
     return db.del(id);
   }
 
-  async function query(queryObject) {
+  async function query(queryObject: object): Promise<Document[]> {
     if (!isObject(queryObject)) {
       throw new Error('doubledb.query: queryObject must be an object');
     }
 
-    let resultIds = new Set();
+    let resultIds = new Set<string>();
     let isFirstCondition = true;
 
     for (const [key, value] of Object.entries(queryObject)) {
       if (key === '$or') {
-        const orResults = await Promise.all(value.map(subQuery => query(subQuery)));
+        const orResults = await Promise.all((value as object[]).map(subQuery => query(subQuery)));
         const orIds = new Set(orResults.flat().map(doc => doc.id));
         resultIds = isFirstCondition ? orIds : new Set([...resultIds].filter(id => orIds.has(id)));
       } else if (key.startsWith('$')) {
@@ -317,7 +343,7 @@ async function createDoubleDb (dataDirectory) {
       } else {
         let ids;
         if (isObject(value) && Object.keys(value).some(k => k.startsWith('$'))) {
-          ids = await handleOperators(key, value);
+          ids = await handleOperators(key, value as object);
         } else {
           ids = await getIdsForKeyValue(key, value);
         }
@@ -327,11 +353,11 @@ async function createDoubleDb (dataDirectory) {
     }
 
     const results = await Promise.all([...resultIds].map(id => read(id)));
-    return results.filter(doc => doc !== undefined);
+    return results.filter((doc): doc is Document => doc !== undefined);
   }
 
-  async function handleOperators(key, operators) {
-    let resultIds = new Set();
+  async function handleOperators(key: string, operators: object): Promise<Set<string>> {
+    let resultIds = new Set<string>();
     let isFirstOperator = true;
 
     for (const [op, value] of Object.entries(operators)) {
@@ -350,19 +376,19 @@ async function createDoubleDb (dataDirectory) {
           ids = await getIdsForKeyValueRange(key, op, value);
           break;
         case '$in':
-          ids = await getIdsForKeyValueIn(key, value);
+          ids = await getIdsForKeyValueIn(key, value as any[]);
           break;
         case '$nin':
-          ids = await getIdsForKeyValueNotIn(key, value);
+          ids = await getIdsForKeyValueNotIn(key, value as any[]);
           break;
         case '$all':
-          ids = await getIdsForKeyValueAll(key, value);
+          ids = await getIdsForKeyValueAll(key, value as any[]);
           break;
         case '$exists':
-          ids = await getIdsForKeyExists(key, value);
+          ids = await getIdsForKeyExists(key, value as boolean);
           break;
         case '$not':
-          ids = await handleOperators(key, value);
+          ids = await handleOperators(key, value as object);
           ids = await getAllIdsExcept(ids);
           break;
         default:
@@ -376,8 +402,8 @@ async function createDoubleDb (dataDirectory) {
     return resultIds;
   }
 
-  async function getIdsForKeyValue(key, value) {
-    const ids = new Set();
+  async function getIdsForKeyValue(key: string, value: any): Promise<Set<string>> {
+    const ids = new Set<string>();
     for await (const ckey of db.keys({
       gte: `indexes.${key}=${value}|`,
       lte: `indexes.${key}=${value}|${LastUnicodeCharacter}`
@@ -388,15 +414,17 @@ async function createDoubleDb (dataDirectory) {
     return ids;
   }
 
-  async function getIdsForKeyValueNot(key, value) {
+  async function getIdsForKeyValueNot(key: string, value: any): Promise<Set<string>> {
     const allIds = await getAllIds();
     const idsToExclude = await getIdsForKeyValue(key, value);
     return new Set([...allIds].filter(id => !idsToExclude.has(id)));
   }
 
-  async function getIdsForKeyValueRange(key, op, value) {
-    const ids = new Set();
-    const query = {
+  async function getIdsForKeyValueRange(key: string, op: string, value: number): Promise<Set<string>> {
+    const ids = new Set<string>();
+    const query =
+
+ {
       gte: `indexes.${key}=`,
       lte: `indexes.${key}=${LastUnicodeCharacter}`
     };
@@ -419,8 +447,8 @@ async function createDoubleDb (dataDirectory) {
     return ids;
   }
 
-  async function getIdsForKeyValueIn(key, values) {
-    const ids = new Set();
+  async function getIdsForKeyValueIn(key: string, values: any[]): Promise<Set<string>> {
+    const ids = new Set<string>();
     for (const value of values) {
       const valueIds = await getIdsForKeyValue(key, value);
       valueIds.forEach(id => ids.add(id));
@@ -428,8 +456,8 @@ async function createDoubleDb (dataDirectory) {
     return ids;
   }
 
-  async function getIdsForKeyValueAll(key, values) {
-    const ids = new Set();
+  async function getIdsForKeyValueAll(key: string, values: any[]): Promise<Set<string>> {
+    const ids = new Set<string>();
     const allValues = new Set(values);
 
     for await (const ckey of db.keys({
@@ -442,7 +470,7 @@ async function createDoubleDb (dataDirectory) {
 
       if (!ids.has(id)) {
         const document = await read(id);
-        const documentValues = document[key];
+        const documentValues = document?.[key];
         if (Array.isArray(documentValues) && values.every(value => documentValues.includes(value))) {
           ids.add(id);
         }
@@ -452,14 +480,14 @@ async function createDoubleDb (dataDirectory) {
     return ids;
   }
 
-  async function getIdsForKeyValueNotIn(key, values) {
+  async function getIdsForKeyValueNotIn(key: string, values: any[]): Promise<Set<string>> {
     const allIds = await getAllIds();
     const idsToExclude = await getIdsForKeyValueIn(key, values);
     return new Set([...allIds].filter(id => !idsToExclude.has(id)));
   }
 
-  async function getIdsForKeyExists(key, shouldExist) {
-    const ids = new Set();
+  async function getIdsForKeyExists(key: string, shouldExist: boolean): Promise<Set<string>> {
+    const ids = new Set<string>();
     const query = {
       gte: `indexes.${key}=`,
       lt: `indexes.${key}=${LastUnicodeCharacter}`
@@ -475,15 +503,15 @@ async function createDoubleDb (dataDirectory) {
     return ids;
   }
 
-  async function getAllIds() {
-    const ids = new Set();
+  async function getAllIds(): Promise<Set<string>> {
+    const ids = new Set<string>();
     for await (const key of db.keys({gte: '', lt: 'indexes'})) {
       ids.add(key);
     }
     return ids;
   }
 
-  async function getAllIdsExcept(excludeIds) {
+  async function getAllIdsExcept(excludeIds: Set<string>): Promise<Set<string>> {
     const allIds = await getAllIds();
     return new Set([...allIds].filter(id => !excludeIds.has(id)));
   }

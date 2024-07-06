@@ -1,12 +1,12 @@
 import { promises as fs } from 'node:fs';
-import { test } from 'node:test';
-import assert from 'node:assert';
-import createDoubleDb from '../index.js';
+import { after, test } from 'node:test';
+import { strict as assert } from 'node:assert';
+import createDoubleDb from '../dist/index.js';
 
 const testDir = './testData-' + Math.random();
 
-test.after(async () => {
-  fs.rm(testDir, { recursive: true, force: true });
+after(async () => {
+  await fs.rm(testDir, { recursive: true, force: true });
 });
 
 test('find - top level key found - returns document', async () => {
@@ -159,7 +159,7 @@ test('read - no id supplied - throws', async () => {
     await db.read();
   } catch (error) {
     await db.close();
-    assert.strictEqual(error.message, 'Key cannot be null or undefined');
+    assert.strictEqual((error as Error).message, 'Key cannot be null or undefined');
   }
 });
 
@@ -200,7 +200,7 @@ test('create - existing key - throws', async () => {
       a: 1
     });
   } catch (error) {
-    assert.strictEqual(error.message, 'doubledb.insert: document with id myid already exists');
+    assert.strictEqual((error as Error).message, 'doubledb.insert: document with id myid already exists');
   }
 
   await db.close();
@@ -214,7 +214,7 @@ test('create - missing arguments - throws', async () => {
     await db.insert();
   } catch (error) {
     await db.close();
-    assert.strictEqual(error.message, 'doubledb.insert: no document was supplied to insert function');
+    assert.strictEqual((error as Error).message, 'doubledb.insert: no document was supplied to insert function');
   }
 });
 
@@ -226,7 +226,7 @@ test('replace - missing id argument - throws', async () => {
     await db.replace(null);
   } catch (error) {
     await db.close();
-    assert.strictEqual(error.message, 'doubledb.replace: no id was supplied to replace function');
+    assert.strictEqual((error as Error).message, 'doubledb.replace: no id was supplied to replace function');
   }
 });
 
@@ -238,7 +238,7 @@ test('replace - missing newDocument argument - throws', async () => {
     await db.replace(1);
   } catch (error) {
     await db.close();
-    assert.strictEqual(error.message, 'doubledb.replace: no newDocument was supplied to replace function');
+    assert.strictEqual((error as Error).message, 'doubledb.replace: no newDocument was supplied to replace function');
   }
 });
 
@@ -250,7 +250,7 @@ test('replace - none matching id and newDocument.id - throws', async () => {
     await db.replace(1, { id: 2 });
   } catch (error) {
     await db.close();
-    assert.strictEqual(error.message, 'doubledb.replace: the id (1) and newDocument.id (2) must be the same, or not defined');
+    assert.strictEqual((error as Error).message, 'doubledb.replace: the id (1) and newDocument.id (2) must be the same, or not defined');
   }
 });
 
@@ -262,7 +262,7 @@ test('replace - not found - throws', async () => {
     await db.replace(1, { a: 1 });
   } catch (error) {
     await db.close();
-    assert.strictEqual(error.message, 'doubledb.replace: document with id 1 does not exist');
+    assert.strictEqual((error as Error).message, 'doubledb.replace: document with id 1 does not exist');
   }
 });
 
@@ -294,7 +294,7 @@ test('patch - missing id argument - throws', async () => {
     await db.patch(null);
   } catch (error) {
     await db.close();
-    assert.strictEqual(error.message, 'doubledb.patch: no id was supplied to patch function');
+    assert.strictEqual((error as Error).message, 'doubledb.patch: no id was supplied to patch function');
   }
 });
 
@@ -306,7 +306,7 @@ test('patch - missing newDocument argument - throws', async () => {
     await db.patch(1);
   } catch (error) {
     await db.close();
-    assert.strictEqual(error.message, 'doubledb.patch: no newDocument was supplied to patch function');
+    assert.strictEqual((error as Error).message, 'doubledb.patch: no newDocument was supplied to patch function');
   }
 });
 
@@ -318,7 +318,7 @@ test('patch - none matching id and newDocument.id - throws', async () => {
     await db.patch(1, { id: 2 });
   } catch (error) {
     await db.close();
-    assert.strictEqual(error.message, 'doubledb.patch: the id (1) and newDocument.id (2) must be the same, or not defined');
+    assert.strictEqual((error as Error).message, 'doubledb.patch: the id (1) and newDocument.id (2) must be the same, or not defined');
   }
 });
 
@@ -330,7 +330,7 @@ test('patch - not found - throws', async () => {
     await db.patch(1, { a: 1 });
   } catch (error) {
     await db.close();
-    assert.strictEqual(error.message, 'doubledb.patch: document with id 1 does not exist');
+    assert.strictEqual((error as Error).message, 'doubledb.patch: document with id 1 does not exist');
   }
 });
 
@@ -374,7 +374,7 @@ test('remove - missing id argument - throws', async () => {
     await db.remove(null);
   } catch (error) {
     await db.close();
-    assert.strictEqual(error.message, 'doubledb.remove: no id was supplied to replace function');
+    assert.strictEqual((error as Error).message, 'doubledb.remove: no id was supplied to replace function');
   }
 });
 
@@ -386,7 +386,7 @@ test('remove - not found - throws', async () => {
     await db.remove('nothing');
   } catch (error) {
     await db.close();
-    assert.strictEqual(error.message, 'doubledb.remove: document with id nothing does not exist');
+    assert.strictEqual((error as Error).message, 'doubledb.remove: document with id nothing does not exist');
   }
 });
 

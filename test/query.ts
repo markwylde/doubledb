@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import test from 'node:test';
-import assert from 'node:assert';
-import createDoubleDb from '../index.js';
+import { strict as assert } from 'node:assert';
+import createDoubleDb from '../src/index';
 
 const testDir = './testData-' + Math.random();
 
