@@ -1,12 +1,12 @@
 import { promises as fs } from 'node:fs';
 import test from 'node:test';
-import assert from 'node:assert';
-import createDoubleDb from '../index.js';
+import { strict as assert } from 'node:assert';
+import createDoubleDb from '../src/index';
 
 const testDir = './testData-' + Math.random();
 
 test.after(async () => {
-  fs.rm(testDir, { recursive: true, force: true });
+  await fs.rm(testDir, { recursive: true, force: true });
 });
 
 test('indexes - single level - stores correct indexes', async (t) => {
@@ -26,7 +26,7 @@ test('indexes - single level - stores correct indexes', async (t) => {
       array: ['testa', 'testb']
     });
 
-    const indexes = [];
+    const indexes: Array<{ key: string, value: string }> = [];
 
     for await (const [key, value] of db._level.iterator({ gt: 'indexes.', lt: 'indexes~' })) {
       indexes.push({ key, value });

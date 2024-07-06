@@ -1,24 +1,24 @@
 import { promises as fs } from 'fs';
 import test from 'node:test';
-import assert from 'node:assert';
-import createDoubleDb from '../index.js';
+import { strict as assert } from 'node:assert';
+import createDoubleDb, { DoubleDb } from '../src/index';
 
 const testDir = './testData-' + Math.random();
 
 test.after(async () => {
-  fs.rm(testDir, { recursive: true, force: true });
+  await fs.rm(testDir, { recursive: true, force: true });
 });
 
 test.skip('stress test', async (t) => {
   await t.test('stress test operations', async () => {
     await fs.rm(testDir, { recursive: true }).catch(() => {});
-    const db = await createDoubleDb(testDir);
+    const db: DoubleDb = await createDoubleDb(testDir);
 
     let id = 1;
     {
       const startTime = Date.now();
       for (let x = 0; x < 100; x++) {
-        const actions = [];
+        const actions: Array<{ type: string; key: string | number; value: string | number }> = [];
         console.log(x);
         for (let y = 0; y < 10000; y++) {
           id++;
@@ -50,7 +50,7 @@ test.skip('stress test', async (t) => {
     }
 
     {
-      const middleId = parseInt(id / 2);
+      const middleId = Math.floor(id / 2);
       const startTime = Date.now();
       const findRecords = await Promise.all([
         db.find('id', middleId),
@@ -77,14 +77,14 @@ test.skip('stress test', async (t) => {
     }
 
     {
-      const middleId = parseInt(id / 2);
+      const middleId = Math.floor(id / 2);
       const startTime = Date.now();
-      const readRecord = await db.read(parseInt(middleId / 2));
+      const readRecord = await db.read(Math.floor(middleId / 2));
       const endTime = Date.now();
 
       console.log('Read id', id, 'in', endTime - startTime, 'ms');
       assert.deepStrictEqual(readRecord, {
-        id: parseInt(middleId / 2),
+        id: Math.floor(middleId / 2),
         a: 1
       });
     }
