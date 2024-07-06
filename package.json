@@ -7,9 +7,10 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "preinstall": "tsc",
+    "postinstall": "tsc",
     "prepublish": "tsc",
-    "test": "tsx --experimental-test-coverage --test test/*.ts"
+    "coverage": "c8 -r html tsx --test test/*.ts && open coverage/index.html",
+    "test": "c8 tsx --test test/*.ts"
   },
   "repository": {
     "type": "git",
@@ -39,7 +40,8 @@
     "@types/uuid": "^10.0.0",
     "c8": "^10.1.2",
     "semistandard": "^17.0.0",
-    "tsx": "^4.16.2"
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3"
   },
   "dependencies": {
     "level": "^8.0.1",
