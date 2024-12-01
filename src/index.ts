@@ -458,7 +458,6 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
 
   async function getIdsForKeyValueAll(key: string, values: any[]): Promise<Set<string>> {
     const ids = new Set<string>();
-    const allValues = new Set(values);
 
     for await (const ckey of db.keys({
       gte: `indexes.${key}=`,
