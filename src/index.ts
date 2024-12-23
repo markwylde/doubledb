@@ -30,6 +30,8 @@ export type DoubleDb = {
   read: (id: string) => Promise<Document | undefined>;
   query: (queryObject: object) => Promise<Document[]>;
   close: () => Promise<void>;
+  batchInsert: (documents: Document[]) => Promise<Document[]>;
+  upsert: (id: string, document: Document) => Promise<Document>;
 }
 
 function notFoundToUndefined(error: Error & { code?: string }): undefined {
@@ -422,9 +424,7 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
 
   async function getIdsForKeyValueRange(key: string, op: string, value: number): Promise<Set<string>> {
     const ids = new Set<string>();
-    const query =
-
- {
+    const query = {
       gte: `indexes.${key}=`,
       lte: `indexes.${key}=${LastUnicodeCharacter}`
     };
@@ -515,6 +515,60 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
     return new Set([...allIds].filter(id => !excludeIds.has(id)));
   }
 
+  async function batchInsert(documents: Document[]): Promise<Document[]> {
+    if (!Array.isArray(documents) || documents.length === 0) {
+      throw new Error('doubledb.batchInsert: documents must be a non-empty array');
+    }
+
+    const ops: { type: 'put'; key: string; value: string }[] = [];
+    for (const doc of documents) {
+      const id = doc.id || uuid();
+      const puttableRecord = { id, ...doc };
+      ops.push({ type: 'put', key: id, value: JSON.stringify(puttableRecord) });
+    }
+
+    await db.batch(ops);
+
+    // Index each document in parallel
+    await Promise.all(documents.map(async doc => {
+      const id = doc.id || uuid();
+      const puttableRecord = { id, ...doc };
+      await addToIndexes(id, puttableRecord);
+    }));
+
+    return documents.map(doc => {
+      const id = doc.id || uuid();
+      return { id, ...doc };
+    });
+  }
+
+  async function upsert(id: string, document: Document): Promise<Document> {
+    if (!id) {
+      throw new Error('doubledb.upsert: no id was supplied to upsert function');
+    }
+
+    if (!document) {
+      throw new Error('doubledb.upsert: no document was supplied to upsert function');
+    }
+
+    const existingDocument = await db.get(id).catch(notFoundToUndefined);
+
+    if (existingDocument) {
+      await removeIndexesForDocument(id, existingDocument);
+    }
+
+    const puttableRecord = {
+      ...JSON.parse(existingDocument || '{}'),
+      ...document,
+      id
+    };
+
+    await db.put(id, JSON.stringify(puttableRecord));
+    await addToIndexes(id, puttableRecord);
+
+    return puttableRecord;
+  }
+
   return {
     _level: db,
     find,
@@ -525,7 +579,9 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
     remove,
     read,
     query,
-    close: db.close.bind(db)
+    close: db.close.bind(db),
+    batchInsert,
+    upsert
   };
 }
 

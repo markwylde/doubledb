@@ -23,7 +23,7 @@ doubledb.insert({
   skills: ['cooking', 'running']
 });
 
-doubledb.get(record.id);
+doubledb.read(record.id);
 doubledb.find('firstName', 'Joe');
 doubledb.find('stats.wins', 10);
 doubledb.find('skills', 'cooking');
@@ -34,9 +34,16 @@ doubledb.filter('firstName', v => v.startsWith('J'), { limit: 10, skip: 20, gt: 
 doubledb.replace(record.id, { firstName: 'Joe', lastName: 'Bloggs' });
 doubledb.patch(record.id, { firstName: 'Bob' });
 doubledb.remove(record.id);
+
+// Batch insert multiple documents for better performance
+doubledb.batchInsert([
+  { firstName: 'Alice', lastName: 'Smith' },
+  { firstName: 'Bob', lastName: 'Johnson' },
+  { firstName: 'Charlie', lastName: 'Brown' }
+]);
 ```
 
-### `.get(id)`
+### `.read(id)`
 Get a single record by it's `.id` property.
 
 If a record is found, the whole record will be returned.
@@ -188,3 +195,18 @@ const records = await doubledb.query({
 - **$not**: Matches documents that do not match the specified condition.
 
 This query method is powerful and allows combining multiple conditions and operators to fetch the desired records from the database.
+
+### `.batchInsert(documents)`
+Insert multiple documents at once for better performance.
+
+**Example:**
+```javascript
+await doubledb.batchInsert([
+  { firstName: 'Alice', lastName: 'Smith' },
+  { firstName: 'Bob', lastName: 'Johnson' },
+  { firstName: 'Charlie', lastName: 'Brown' }
+]);
+```
+
+If the documents are successfully inserted, an array of the inserted documents will be returned.
+If the documents array is empty, an error will be thrown.
