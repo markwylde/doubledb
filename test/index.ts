@@ -406,3 +406,80 @@ test('remove - found - removes document', async () => {
   assert.strictEqual(readAfter, undefined);
   assert.strictEqual(removeResult, undefined);
 });
+
+test('batchInsert - inserts multiple documents at once', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
+
+  const docsToInsert = [
+    { id: 'batch1', value: 10 },
+    { id: 'batch2', value: 20 },
+    { id: 'batch3', value: 30 },
+  ];
+  const insertedDocs = await db.batchInsert(docsToInsert);
+
+  assert.strictEqual(insertedDocs.length, 3);
+  assert.deepStrictEqual(await db.read('batch1'), docsToInsert[0]);
+  assert.deepStrictEqual(await db.read('batch2'), docsToInsert[1]);
+  assert.deepStrictEqual(await db.read('batch3'), docsToInsert[2]);
+
+  await db.close();
+});
+
+test('batchInsert - empty array - throws error', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
+
+  try {
+    await db.batchInsert([]);
+  } catch (error) {
+    await db.close();
+    assert.strictEqual((error as Error).message, 'doubledb.batchInsert: documents must be a non-empty array');
+  }
+});
+
+test('upsert - inserts new document if not exists', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
+
+  const upsertedRecord = await db.upsert('id1', { a: 1 });
+
+  const readRecord = await db.read('id1');
+
+  await db.close();
+
+  assert.deepStrictEqual(upsertedRecord, {
+    id: 'id1',
+    a: 1
+  });
+
+  assert.deepStrictEqual(readRecord, {
+    id: 'id1',
+    a: 1
+  });
+});
+
+test('upsert - updates existing document if exists', async () => {
+  await fs.rm(testDir, { recursive: true }).catch(() => {});
+  const db = await createDoubleDb(testDir);
+
+  await db.insert({ id: 'id1', a: 1 });
+
+  const upsertedRecord = await db.upsert('id1', { a: 2, b: 3 });
+
+  const readRecord = await db.read('id1');
+
+  await db.close();
+
+  assert.deepStrictEqual(upsertedRecord, {
+    id: 'id1',
+    a: 2,
+    b: 3
+  });
+
+  assert.deepStrictEqual(readRecord, {
+    id: 'id1',
+    a: 2,
+    b: 3
+  });
+});
