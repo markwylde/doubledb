@@ -31,6 +31,7 @@ doubledb.find('firstName', v => v.startsWith('J'), { skip: 20, gt: 'J', lt: 'K' 
 doubledb.filter('firstName', 'Joe');
 doubledb.filter('firstName', v => v.startsWith('J'));
 doubledb.filter('firstName', v => v.startsWith('J'), { limit: 10, skip: 20, gt: 'J', lt: 'K' });
+doubledb.upsert(record.id, { firstName: 'Joe', lastName: 'Bloggs' });
 doubledb.replace(record.id, { firstName: 'Joe', lastName: 'Bloggs' });
 doubledb.patch(record.id, { firstName: 'Bob' });
 doubledb.remove(record.id);
