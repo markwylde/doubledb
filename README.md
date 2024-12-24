@@ -192,6 +192,7 @@ const records = await doubledb.query({
 ### How Operators Work:
 - **$eq**: Matches documents where the field is equal to the specified value.
 - **$ne**: Matches documents where the field is not equal to the specified value.
+- **$sw**: Matches documents where the field starts with the specified value.
 - **$gt / $gte**: Matches documents where the field is greater than (or greater than or equal to) the specified value.
 - **$lt / $lte**: Matches documents where the field is less than (or less than or equal to) the specified value.
 - **$in**: Matches documents where the field value is in the specified array.
