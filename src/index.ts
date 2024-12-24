@@ -393,6 +393,9 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
           ids = await handleOperators(key, value as object);
           ids = await getAllIdsExcept(ids);
           break;
+        case '$sw':
+          ids = await getIdsForKeyValueStartsWith(key, value as string);
+          break;
         default:
           // For unsupported operators, fall back to filtering all documents
           return getAllIds();
@@ -409,6 +412,18 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
     for await (const ckey of db.keys({
       gte: `indexes.${key}=${value}|`,
       lte: `indexes.${key}=${value}|${LastUnicodeCharacter}`
+    })) {
+      const id = await db.get(ckey);
+      ids.add(id);
+    }
+    return ids;
+  }
+
+  async function getIdsForKeyValueStartsWith(key: string, prefix: string): Promise<Set<string>> {
+    const ids = new Set<string>();
+    for await (const ckey of db.keys({
+      gte: `indexes.${key}=${prefix}`,
+      lt: `indexes.${key}=${prefix}${LastUnicodeCharacter}`
     })) {
       const id = await db.get(ckey);
       ids.add(id);

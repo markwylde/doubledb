@@ -15,6 +15,17 @@ async function setupTestDb() {
   return db;
 }
 
+test('$sw operator on string', async () => {
+  const db = await setupTestDb();
+  await db.insert({ value: 'alpha' });
+  await db.insert({ value: 'beta' });
+  await db.insert({ value: 'chi' });
+  const result = await db.query({ value: { $sw: 'b' } });
+  assert.strictEqual(result.length, 1);
+  assert.strictEqual(result[0].value, 'beta');
+  await db.close();
+});
+
 test('$eq operator', async () => {
   const db = await setupTestDb();
   await db.insert({ value: 5 });
