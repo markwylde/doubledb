@@ -27,6 +27,20 @@ test('empty query', async () => {
   await db.close();
 });
 
+test('special characters', async () => {
+  const db = await setupTestDb();
+  await db.insert({ id: 'users/mark', name: 'Mark' });
+  await db.insert({ id: 'users/joe', name: 'Joe' });
+  await db.insert({ id: 'users/mary', name: 'Mary' });
+  await db.insert({ id: 'groups/standard', name: 'Standard' });
+  await db.insert({ id: 'groups/admin', name: 'Admin' });
+  await db.insert({ id: 'rootD', name: 'rootD' });
+
+  const result = await db.query();
+  assert.strictEqual(result.length, 6);
+  await db.close();
+});
+
 test('$sw operator on string', async () => {
   const db = await setupTestDb();
   await db.insert({ value: 'alpha' });

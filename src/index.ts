@@ -331,35 +331,7 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
 
   async function query(queryObject?: object, options?: { limit?: number; offset?: number; sort?: { [key: string]: 1 | -1 }; project?: { [key: string]: 1 } }): Promise<Document[]> {
     if (!queryObject || Object.keys(queryObject).length === 0) {
-      const allIds = await getAllIds();
-      let results = await Promise.all([...allIds].map(id => read(id)));
-      const offset = options?.offset ?? 0;
-      const limit = options?.limit ?? results.length;
-
-      if (options?.sort) {
-        const sortFields = Object.entries(options.sort);
-        results.sort((a, b) => {
-          for (const [field, direction] of sortFields) {
-            if (a[field] < b[field]) return direction === 1 ? -1 : 1;
-            if (a[field] > b[field]) return direction === 1 ? 1 : -1;
-          }
-          return 0;
-        });
-      }
-
-      if (options?.project) {
-        results = results.map(doc => {
-          const projected: Document = {};
-          for (const field of Object.keys(options.project)) {
-            if (field in doc) {
-              projected[field] = doc[field];
-            }
-          }
-          return projected;
-        });
-      }
-
-      return results.filter((doc): doc is Document => doc !== undefined).slice(offset, offset + limit);
+      queryObject = { id: { $exists: true } };
     }
 
     let resultIds = new Set<string>();
