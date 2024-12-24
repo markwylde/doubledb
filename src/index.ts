@@ -28,7 +28,7 @@ export type DoubleDb = {
   patch: (id: string, newDocument: Partial<Document>) => Promise<Document>;
   remove: (id: string) => Promise<void>;
   read: (id: string) => Promise<Document | undefined>;
-  query: (queryObject: object) => Promise<Document[]>;
+  query: (queryObject?: object) => Promise<Document[]>;
   close: () => Promise<void>;
   batchInsert: (documents: Document[]) => Promise<Document[]>;
   upsert: (id: string, document: Document) => Promise<Document>;
@@ -327,9 +327,11 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
     return db.del(id);
   }
 
-  async function query(queryObject: object): Promise<Document[]> {
-    if (!isObject(queryObject)) {
-      throw new Error('doubledb.query: queryObject must be an object');
+  async function query(queryObject?: object): Promise<Document[]> {
+    if (!queryObject || Object.keys(queryObject).length === 0) {
+      const allIds = await getAllIds();
+      const results = await Promise.all([...allIds].map(id => read(id)));
+      return results.filter((doc): doc is Document => doc !== undefined);
     }
 
     let resultIds = new Set<string>();
