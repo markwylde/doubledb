@@ -141,7 +141,7 @@ The final record will be:
 ### `.remove(key)`
 Query the database using a complex query object. This method allows for advanced querying using a combination of fields and operators.
 
-### `.query(queryObject)`
+### `.query(queryObject, options)`
 Query the database using a complex query object. This method allows for advanced querying using a combination of fields and operators.
 
 **Example:**
@@ -153,6 +153,11 @@ const records = await doubledb.query({
     { firstName: { $eq: 'Joe' } },
     { firstName: { $eq: 'joe' } }
   ]
+}, {
+  limit: 10,
+  offset: 5,
+  sort: { firstName: 1 },
+  project: { firstName: 1, lastName: 1 }
 });
 ```
 
@@ -194,6 +199,12 @@ const records = await doubledb.query({
 - **$all**: Matches documents where the array field contains all the specified values.
 - **$exists**: Matches documents where the field exists (or does not exist if set to false).
 - **$not**: Matches documents that do not match the specified condition.
+
+### Query Options:
+- **limit**: Limits the number of returned records.
+- **offset**: Skips the first `number` of records.
+- **sort**: Sorts the records based on the specified fields. Use `1` for ascending and `-1` for descending.
+- **project**: Projects only the specified fields in the returned records.
 
 This query method is powerful and allows combining multiple conditions and operators to fetch the desired records from the database.
 

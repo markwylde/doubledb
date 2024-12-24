@@ -15,6 +15,18 @@ async function setupTestDb() {
   return db;
 }
 
+test('empty query', async () => {
+  const db = await setupTestDb();
+  await db.insert({ value: 'alpha' });
+  await db.insert({ value: 'beta' });
+  const result = await db.query({});
+  assert.strictEqual(result.length, 2);
+  result.sort((a, b) => a.value < b.value ? -1 : 1);
+  assert.strictEqual(result[0].value, 'alpha');
+  assert.strictEqual(result[1].value, 'beta');
+  await db.close();
+});
+
 test('$sw operator on string', async () => {
   const db = await setupTestDb();
   await db.insert({ value: 'alpha' });
@@ -151,3 +163,69 @@ test('Complex query with $or', async () => {
   assert.strictEqual(result[0].category, 'b');
   await db.close();
 });
+
+test('query limit, offset, sort', async () => {
+  const db = await setupTestDb();
+  for (let i = 0; i < 10; i++) {
+    await db.insert({ value: i });
+  }
+  const result = await db.query({}, {
+    limit: 3,
+    offset: 2,
+    sort: {
+      value: 1
+    }
+  });
+  assert.strictEqual(result.length, 3);
+  assert.strictEqual(result[0].value, 2);
+  assert.strictEqual(result[1].value, 3);
+  assert.strictEqual(result[2].value, 4);
+
+  await db.close();
+});
+
+test('query with sort option', async () => {
+  const db = await setupTestDb();
+  await db.insert({ value: 'gamma' });
+  await db.insert({ value: 'alpha' });
+  await db.insert({ value: 'beta' });
+  const result = await db.query({}, { sort: { value: 1 } });
+  assert.strictEqual(result.length, 3);
+  assert.strictEqual(result[0].value, 'alpha');
+  assert.strictEqual(result[1].value, 'beta');
+  assert.strictEqual(result[2].value, 'gamma');
+  await db.close();
+});
+
+test('query with project option', async () => {
+  const db = await setupTestDb();
+  await db.insert({ value: 'gamma', extra: 'data' });
+  await db.insert({ value: 'alpha', extra: 'info' });
+  const result = await db.query({}, { project: { value: 1 } });
+
+  result.sort((a, b) => a.value < b.value ? -1 : 1);
+  assert.strictEqual(result.length, 2);
+  assert.strictEqual(Object.keys(result[0]).length, 1);
+  assert.strictEqual(result[0].value, 'alpha');
+  assert.strictEqual(Object.keys(result[1]).length, 1);
+  assert.strictEqual(result[1].value, 'gamma');
+
+  await db.close();
+});
+
+test('query with sort and project options', async () => {
+  const db = await setupTestDb();
+  await db.insert({ value: 'gamma', extra: 'data' });
+  await db.insert({ value: 'alpha', extra: 'info' });
+  await db.insert({ value: 'beta', extra: 'details' });
+  const result = await db.query({}, { sort: { value: 1 }, project: { value: 1 } });
+  assert.strictEqual(result.length, 3);
+  assert.strictEqual(Object.keys(result[0]).length, 1);
+  assert.strictEqual(result[0].value, 'alpha');
+  assert.strictEqual(Object.keys(result[1]).length, 1);
+  assert.strictEqual(result[1].value, 'beta');
+  assert.strictEqual(Object.keys(result[2]).length, 1);
+  assert.strictEqual(result[2].value, 'gamma');
+  await db.close();
+});
+
