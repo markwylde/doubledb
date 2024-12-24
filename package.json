@@ -10,7 +10,8 @@
     "postinstall": "tsc",
     "prepublish": "tsc",
     "coverage": "c8 -r html tsx --test test/*.ts && open coverage/index.html",
-    "test": "c8 tsx --test test/*.ts"
+    "test": "c8 tsx --test test/*.ts",
+    "test:only": "c8 tsx --test --test-only test/*.ts"
   },
   "repository": {
     "type": "git",
