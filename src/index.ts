@@ -91,13 +91,43 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
 
   async function decrementCount(prefix: string, key: string, value: any): Promise<void> {
     const countKey = `counts${prefix}.${key}=${value}`;
-    const currentCount = await db.get(countKey).then(Number).catch(() => 0);
-    const newCount = currentCount - 1;
 
-    if (newCount > 0) {
-      await db.put(countKey, newCount.toString());
-    } else {
-      await db.del(countKey).catch(() => {}); // Ignore if key doesn't exist
+    // Use atomic get-and-update similar to incrementCount
+    while (true) {
+      try {
+        let currentCount;
+        try {
+          currentCount = await db.get(countKey).then(Number);
+          if (isNaN(currentCount)) {
+            currentCount = 0;
+          }
+        } catch (error) {
+          if (error.code === 'LEVEL_NOT_FOUND') {
+            currentCount = 0;
+          } else {
+            throw error;
+          }
+        }
+
+        const newCount = currentCount - 1;
+        if (newCount > 0) {
+          await db.put(countKey, newCount.toString());
+        } else {
+          await db.del(countKey).catch(() => {}); // Ignore if key doesn't exist
+        }
+        break;
+      } catch (error) {
+        if (error.code === 'LEVEL_NOT_FOUND') {
+          // Key doesn't exist, nothing to decrement
+          break;
+        }
+        // If we get a conflict, retry
+        if (error.code === 'LEVEL_LOCKED') {
+          continue;
+        }
+        console.error('ERROR in decrementCount:', error);
+        throw error;
+      }
     }
   }
 
@@ -660,6 +690,16 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
     let resultIds = new Set<string>();
     let isFirstOperator = true;
 
+    // Get all IDs that have this field
+    const allIdsWithField = new Set<string>();
+    for await (const ckey of db.keys({
+      gte: `indexes.${key}=`,
+      lte: `indexes.${key}=${LastUnicodeCharacter}`
+    })) {
+      const id = await db.get(ckey);
+      allIdsWithField.add(id);
+    }
+
     for (const [op, value] of Object.entries(operators)) {
       let ids: Set<string>;
       try {
@@ -669,9 +709,8 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
             break;
 
           case '$ne':
-            const allIdsNe = await getAllIds();
             const matchingIdsNe = await getIdsForKeyValue(key, value);
-            ids = new Set([...allIdsNe].filter(id => !matchingIdsNe.has(id)));
+            ids = new Set([...allIdsWithField].filter(id => !matchingIdsNe.has(id)));
             break;
 
           case '$gt':
@@ -681,7 +720,6 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
             if (value === null || value === undefined) {
               throw new Error(`${op} operator requires a non-null value`);
             }
-            // Convert dates to comparable format
             const compareValue = value instanceof Date ? value.toISOString() : value;
             ids = await getIdsForKeyValueRange(key, op, compareValue);
             break;
@@ -691,7 +729,7 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
               throw new Error('$in operator requires an array');
             }
             if (value.length === 0) {
-              ids = new Set<string>(); // Empty array means no matches
+              ids = new Set<string>();
             } else {
               ids = await getIdsForKeyValueIn(key, value);
             }
@@ -702,9 +740,10 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
               throw new Error('$nin operator requires an array');
             }
             if (value.length === 0) {
-              ids = await getAllIds(); // Empty array means all documents match
+              ids = allIdsWithField;
             } else {
-              ids = await getIdsForKeyValueNotIn(key, value);
+              const matchingIds = await getIdsForKeyValueIn(key, value);
+              ids = new Set([...allIdsWithField].filter(id => !matchingIds.has(id)));
             }
             break;
 
@@ -712,7 +751,7 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
             if (typeof value !== 'boolean') {
               throw new Error('$exists operator requires a boolean value');
             }
-            ids = await getIdsForKeyExists(key, value);
+            ids = value ? allIdsWithField : new Set([...await getAllIds()].filter(id => !allIdsWithField.has(id)));
             break;
 
           case '$all':
@@ -720,7 +759,7 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
               throw new Error('$all operator requires an array');
             }
             if (value.length === 0) {
-              ids = await getAllIds(); // Empty array means all documents match
+              ids = allIdsWithField;
             } else {
               ids = await getIdsForKeyValueAll(key, value);
             }
@@ -732,10 +771,10 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
             }
             if (isObject(value)) {
               const matchingIds = await handleOperators(key, value as object);
-              const allIds = await getAllIds();
-              ids = new Set([...allIds].filter(id => !matchingIds.has(id)));
+              ids = new Set([...allIdsWithField].filter(id => !matchingIds.has(id)));
             } else {
-              ids = await getIdsForKeyValueNot(key, value);
+              const matchingIds = await getIdsForKeyValue(key, value);
+              ids = new Set([...allIdsWithField].filter(id => !matchingIds.has(id)));
             }
             break;
 
