@@ -12,7 +12,8 @@ npm install --save doubledb
 import createDoubledb from 'doubledb';
 const doubledb = await createDoubledb('./data');
 
-doubledb.insert({
+// Insert a document
+await doubledb.insert({
   id: undefined, // defaults to uuid, must be unique
   firstName: 'Joe',
   lastName: 'Bloggs',
@@ -23,35 +24,55 @@ doubledb.insert({
   skills: ['cooking', 'running']
 });
 
-doubledb.read(record.id);
-doubledb.find('firstName', 'Joe');
-doubledb.find('stats.wins', 10);
-doubledb.find('skills', 'cooking');
-doubledb.find('firstName', v => v.startsWith('J'), { skip: 20, gt: 'J', lt: 'K' });
-doubledb.filter('firstName', 'Joe');
-doubledb.filter('firstName', v => v.startsWith('J'));
-doubledb.filter('firstName', v => v.startsWith('J'), { limit: 10, skip: 20, gt: 'J', lt: 'K' });
-doubledb.upsert(record.id, { firstName: 'Joe', lastName: 'Bloggs' });
-doubledb.replace(record.id, { firstName: 'Joe', lastName: 'Bloggs' });
-doubledb.patch(record.id, { firstName: 'Bob' });
-doubledb.remove(record.id);
+// Read operations
+await doubledb.read(record.id);
+await doubledb.find('firstName', 'Joe');
+await doubledb.find('stats.wins', 10);
+await doubledb.find('skills', 'cooking');
+await doubledb.find('firstName', v => v.startsWith('J'), { skip: 20, gt: 'J', lt: 'K' });
+await doubledb.filter('firstName', 'Joe');
+await doubledb.filter('firstName', v => v.startsWith('J'));
+await doubledb.filter('firstName', v => v.startsWith('J'), { limit: 10, skip: 20, gt: 'J', lt: 'K' });
 
-// Batch insert multiple documents for better performance
-doubledb.batchInsert([
+// Update operations
+await doubledb.upsert(record.id, { firstName: 'Joe', lastName: 'Bloggs' });
+await doubledb.replace(record.id, { firstName: 'Joe', lastName: 'Bloggs' });
+await doubledb.patch(record.id, { firstName: 'Bob' });
+
+// Delete operation
+await doubledb.remove(record.id);
+
+// Batch operations
+await doubledb.batchInsert([
   { firstName: 'Alice', lastName: 'Smith' },
   { firstName: 'Bob', lastName: 'Johnson' },
   { firstName: 'Charlie', lastName: 'Brown' }
 ]);
+
+// Advanced querying
+const users = await doubledb.query({
+  status: 'active',
+  age: { $gte: 18 }
+}, {
+  limit: 10,
+  offset: 0,
+  sort: { lastName: 1 }
+});
+
+// Count documents
+const totalUsers = await doubledb.count({ status: 'active' });
 ```
 
+## API Reference
+
 ### `.read(id)`
-Get a single record by it's `.id` property.
+Get a single record by its `.id` property.
 
 If a record is found, the whole record will be returned.
 If no record is found, `undefined` will be returned.
 
 ### `.find(field, value, { skip })`
-Quickly find a single record by any field (`use.dot.notation.for.nested.properties`) and it's exact value.
+Quickly find a single record by any field (`use.dot.notation.for.nested.properties`) and its exact value.
 
 If multiple records exist, a `skip` option can be provided to ignore the first `number` of finds.
 
@@ -69,38 +90,24 @@ Find using a matcherFunction will work without a `gt` and `lt`, but the indexing
 
 You should provide a `gt` and/or `lt` to let the indexer know where to begin/end.
 
-For example, the query below will scan every first name from `A` all the way to `Z`
-
+For example:
 ```javascript
+// Will scan every record (slow)
 doubledb.find('firstName', v => v.startsWith('Jo'))
-```
 
-Let's tell it to start from `Jo`.
-
-```javascript
+// Better - starts from 'Jo'
 doubledb.find('firstName', v => v.startsWith('Jo'), { gt: 'Jo' })
-```
 
-This will skip all indexes lower than `Jo`. However if it can't find any records, it will keep checking, even if the `firstName` is `Zelda`
-
-So we should help the indexer by giving it a `lt`.
-
-```javascript
+// Best - specify both start and end range
 doubledb.find('firstName', v => v.startsWith('Jo'), { gt: 'Jo', lt: 'K' })
-```
 
-Let's look at some more examples:
-
-```javascript
+// More examples
 doubledb.find('favouriteNumber', v => v > 5 && v < 10, { gt: 5, lt: 10 })
 doubledb.find('firstName', v => ['Dave', 'Peter'].includes(v), { gt: 'Dave', lte: 'Peter' })
 ```
 
-If a record is found, the whole record will be returned.
-If no record is found, `undefined` will be returned.
-
 ### `.filter(field, matcherFunction: (value: string) => boolean), { limit, skip, gt, lt, gte, lte })`
-This works the exact same as `.find` but will return an array.
+This works the exact same as `.find` but will return an array of all matching records instead of just the first match.
 
 If records are found, an array will be returned containing every complete found record.
 If no records are found, an empty array will be returned.
@@ -109,27 +116,21 @@ If no records are found, an empty array will be returned.
 Completely replace a key with a new object, losing all previous fields in the record.
 
 ### `.patch(key, object)`
-Merge the new object in with the existing record.
+Merge the new object with the existing record.
 
-For example, if the following record exists:
-
-```json
+Example:
+```javascript
+// Existing record
 {
   "id": "1",
   "firstName": "Joe",
   "lastName": "Bloggs"
 }
-```
 
-And you run the following `.patch`.
+// After running:
+await doubledb.patch('1', { fullName: 'Joe Bloggs' })
 
-```javascript
-doubledb.patch('1', { fullName: 'Joe Bloggs' })
-```
-
-The final record will be:
-
-```json
+// Result:
 {
   "id": "1",
   "firstName": "Joe",
@@ -139,75 +140,69 @@ The final record will be:
 ```
 
 ### `.remove(key)`
-Query the database using a complex query object. This method allows for advanced querying using a combination of fields and operators.
+Remove a record by its id.
 
 ### `.query(queryObject, options)`
-Query the database using a complex query object. This method allows for advanced querying using a combination of fields and operators.
+Query the database using a complex query object with support for multiple operators and conditions.
 
 **Example:**
 ```javascript
 const records = await doubledb.query({
   location: 'London',
-  category: 'b',
+  age: { $gte: 18 },
   $or: [
-    { firstName: { $eq: 'Joe' } },
-    { firstName: { $eq: 'joe' } }
+    { status: 'active' },
+    { status: 'pending' }
   ]
 }, {
   limit: 10,
-  offset: 5,
-  sort: { firstName: 1 },
+  offset: 0,
+  sort: { lastName: 1 },
   project: { firstName: 1, lastName: 1 }
 });
 ```
 
-The `queryObject` can contain various fields and operators to filter the records. The following operators are supported:
+#### Supported Operators:
+- `$eq`: Equal to a value
+- `$ne`: Not equal to a value
+- `$gt`: Greater than a value
+- `$gte`: Greater than or equal to a value
+- `$lt`: Less than a value
+- `$lte`: Less than or equal to a value
+- `$in`: Value is in the provided array
+- `$nin`: Value is not in the provided array
+- `$all`: Array contains all the provided values
+- `$exists`: Field exists or does not exist
+- `$not`: Negates the condition
+- `$sw`: String starts with value
 
-#### Operators:
-- `$eq`: Equal to a value.
-- `$ne`: Not equal to a value.
-- `$gt`: Greater than a value.
-- `$gte`: Greater than or equal to a value.
-- `$lt`: Less than a value.
-- `$lte`: Less than or equal to a value.
-- `$in`: Value is in the provided array.
-- `$nin`: Value is not in the provided array.
-- `$all`: Array contains all the provided values.
-- `$exists`: Field exists or does not exist.
-- `$not`: Negates the condition.
+### `.count(queryObject?)`
+Count the number of documents matching the given query criteria. If no query object is provided, returns the total number of documents in the database.
 
-**Example Usage of Operators:**
+**Example:**
 ```javascript
-const records = await doubledb.query({
-  age: { $gte: 18, $lt: 30 },
-  status: { $in: ['active', 'pending'] },
+// Count total documents
+const total = await doubledb.count();
+
+// Count documents matching a simple field value
+const londonCount = await doubledb.count({ location: 'London' });
+
+// Count using operators
+const activeUsersCount = await doubledb.count({
+  status: 'active',
+  age: { $gte: 18 }
+});
+
+// Count with $or conditions
+const count = await doubledb.count({
   $or: [
-    { role: { $eq: 'admin' } },
-    { role: { $eq: 'user' } }
-  ],
-  preferences: { $exists: true }
+    { category: 'A' },
+    { category: 'B' }
+  ]
 });
 ```
 
-### How Operators Work:
-- **$eq**: Matches documents where the field is equal to the specified value.
-- **$ne**: Matches documents where the field is not equal to the specified value.
-- **$sw**: Matches documents where the field starts with the specified value.
-- **$gt / $gte**: Matches documents where the field is greater than (or greater than or equal to) the specified value.
-- **$lt / $lte**: Matches documents where the field is less than (or less than or equal to) the specified value.
-- **$in**: Matches documents where the field value is in the specified array.
-- **$nin**: Matches documents where the field value is not in the specified array.
-- **$all**: Matches documents where the array field contains all the specified values.
-- **$exists**: Matches documents where the field exists (or does not exist if set to false).
-- **$not**: Matches documents that do not match the specified condition.
-
-### Query Options:
-- **limit**: Limits the number of returned records.
-- **offset**: Skips the first `number` of records.
-- **sort**: Sorts the records based on the specified fields. Use `1` for ascending and `-1` for descending.
-- **project**: Projects only the specified fields in the returned records.
-
-This query method is powerful and allows combining multiple conditions and operators to fetch the desired records from the database.
+The count method supports all the same operators as the query method. For optimal performance, it uses internal counters for simple queries, while complex queries may require scanning index entries.
 
 ### `.batchInsert(documents)`
 Insert multiple documents at once for better performance.
