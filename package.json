@@ -1,6 +1,6 @@
 {
   "name": "doubledb",
-  "version": "3.3.2",
+  "version": "3.4.0",
   "type": "module",
   "description": "An on disk database that indexes everything for fast querying.",
   "main": "dist/index.js",
