@@ -31,6 +31,7 @@ export type DoubleDb = {
   remove: (id: string) => Promise<void>;
   read: (id: string) => Promise<Document | undefined>;
   query: (queryObject?: object, options?: { limit?: number; offset?: number; sort?: { [key: string]: 1 | -1 }; project?: { [key: string]: 1 } }) => Promise<Document[]>;
+  count: (queryObject?: object) => Promise<number>;
   close: () => Promise<void>;
   batchInsert: (documents: Document[]) => Promise<Document[]>;
   upsert: (id: string, document: Document) => Promise<Document>;
@@ -50,16 +51,76 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
 
   const db = new Level<string, string>(dataDirectory);
 
+  async function incrementCount(prefix: string, key: string, value: any): Promise<void> {
+    const countKey = `counts${prefix}.${key}=${value}`;
+
+    // Use atomic get-and-update
+    while (true) {
+      try {
+        let currentCount;
+        try {
+          currentCount = await db.get(countKey).then(Number);
+          if (isNaN(currentCount)) {
+            currentCount = 0;
+          }
+        } catch (error) {
+          if (error.code === 'LEVEL_NOT_FOUND') {
+            currentCount = 0;
+          } else {
+            throw error;
+          }
+        }
+
+        const newCount = currentCount + 1;
+        await db.put(countKey, newCount.toString());
+        break;
+      } catch (error) {
+        if (error.code === 'LEVEL_NOT_FOUND') {
+          await db.put(countKey, '1');
+          break;
+        }
+        // If we get a conflict, retry
+        if (error.code === 'LEVEL_LOCKED') {
+          continue;
+        }
+        console.error('ERROR in incrementCount:', error);
+        throw error;
+      }
+    }
+  }
+
+  async function decrementCount(prefix: string, key: string, value: any): Promise<void> {
+    const countKey = `counts${prefix}.${key}=${value}`;
+    const currentCount = await db.get(countKey).then(Number).catch(() => 0);
+    const newCount = currentCount - 1;
+
+    if (newCount > 0) {
+      await db.put(countKey, newCount.toString());
+    } else {
+      await db.del(countKey).catch(() => {}); // Ignore if key doesn't exist
+    }
+  }
+
   async function addToIndexes(id: string, object: object, prefix: string = ''): Promise<void> {
     const promises: Promise<void>[] = [];
 
-    const addIndex = (key: string, value: any): Promise<void> => {
-      return db.put('indexes' + prefix + '.' + key + '=' + value + '|' + id, id);
+    const addIndex = async (key: string, value: any): Promise<void> => {
+      const indexKey = 'indexes' + prefix + '.' + key + '=' + value + '|' + id;
+      promises.push(db.put(indexKey, id));
+      promises.push(incrementCount(prefix, key, value));
     };
 
     for (const [key, value] of Object.entries(object)) {
       if (isObject(value)) {
+        // For nested objects, both add indexes for the nested fields
+        // and create an index for the full path
         promises.push(addToIndexes(id, value, prefix + '.' + key));
+        for (const [nestedKey, nestedValue] of Object.entries(value)) {
+          if (!isObject(nestedValue)) {
+            const fullKey = `${key}.${nestedKey}`;
+            promises.push(addIndex(fullKey, nestedValue));
+          }
+        }
       } else if (Array.isArray(value)) {
         value.forEach(item => promises.push(addIndex(key, item)));
       } else {
@@ -74,13 +135,22 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
     const parsedDocument = typeof document === 'string' ? JSON.parse(document) : document;
     const promises: Promise<void>[] = [];
 
-    const removeIndex = (key: string, value: any): Promise<void> => {
-      return db.del('indexes' + prefix + '.' + key + '=' + value + '|' + id).catch(() => {});
+    const removeIndex = async (key: string, value: any): Promise<void> => {
+      const indexKey = 'indexes' + prefix + '.' + key + '=' + value + '|' + id;
+      promises.push(db.del(indexKey).catch(() => {}));
+      promises.push(decrementCount(prefix, key, value));
     };
 
     for (const [key, value] of Object.entries(parsedDocument)) {
       if (isObject(value)) {
+        // Remove indexes for both nested fields and full paths
         promises.push(removeIndexesForDocument(id, value, prefix + '.' + key));
+        for (const [nestedKey, nestedValue] of Object.entries(value)) {
+          if (!isObject(nestedValue)) {
+            const fullKey = `${key}.${nestedKey}`;
+            promises.push(removeIndex(fullKey, nestedValue));
+          }
+        }
       } else if (Array.isArray(value)) {
         value.forEach(item => promises.push(removeIndex(key, item)));
       } else {
@@ -113,6 +183,7 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
 
     await db.put(id, JSON.stringify(puttableRecord));
     await addToIndexes(id, puttableRecord);
+    await incrementCount('', '__total__', 'documents');
 
     return puttableRecord;
   }
@@ -144,7 +215,6 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
       id
     };
     await db.put(id, JSON.stringify(puttableRecord));
-
     await addToIndexes(id, puttableRecord);
 
     return puttableRecord;
@@ -178,7 +248,6 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
       id
     };
     await db.put(id, JSON.stringify(puttableRecord));
-
     await addToIndexes(id, puttableRecord);
 
     return puttableRecord;
@@ -325,8 +394,132 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
     }
 
     await removeIndexesForDocument(id, existingDocument);
-
+    await decrementCount('', '__total__', 'documents');
     return db.del(id);
+  }
+
+  async function getCountForKeyValue(prefix: string, key: string, value: any): Promise<number> {
+    const countKey = `counts${prefix}.${key}=${value}`;
+    try {
+      const rawCount = await db.get(countKey);
+      const count = Number(rawCount);
+      if (isNaN(count)) {
+        return 0;
+      }
+      return count;
+    } catch (error) {
+      if (error.code === 'LEVEL_NOT_FOUND') {
+        return 0;
+      }
+      console.error('ERROR in getCountForKeyValue:', error);
+      return 0;
+    }
+  }
+
+  async function getTotalCount(): Promise<number> {
+    try {
+      const count = await getCountForKeyValue('', '__total__', 'documents');
+      if (isNaN(count)) {
+        console.log('WARNING: getTotalCount returned NaN, defaulting to 0');
+        return 0;
+      }
+      return count;
+    } catch (error) {
+      console.log('ERROR in getTotalCount:', error);
+      return 0;
+    }
+  }
+
+  async function getCountForOperators(prefix: string, key: string, operators: object): Promise<number> {
+    let totalCount = 0;
+    let isFirstOperator = true;
+
+    for (const [op, value] of Object.entries(operators)) {
+      let count;
+      switch (op) {
+        case '$eq':
+          count = await getCountForKeyValue(prefix, key, value);
+          break;
+        case '$ne':
+          count = await getTotalCount();
+          const excludeCount = await getCountForKeyValue(prefix, key, value);
+          count = count - excludeCount;
+          break;
+        case '$in':
+          count = 0;
+          for (const val of value as any[]) {
+            count += await getCountForKeyValue(prefix, key, val);
+          }
+          break;
+        case '$nin':
+          count = await getTotalCount();
+          for (const val of value as any[]) {
+            count -= await getCountForKeyValue(prefix, key, val);
+          }
+          break;
+        case '$exists':
+          if (value) {
+            count = await sumCountsForPrefix(`counts${prefix}.${key}=`);
+          } else {
+            count = await getTotalCount() - await sumCountsForPrefix(`counts${prefix}.${key}=`);
+          }
+          break;
+        default:
+          // Fall back to ID collection for unsupported operators
+          const ids = await handleOperators(key, { [op]: value });
+          count = ids.size;
+          break;
+      }
+      totalCount = isFirstOperator ? count : Math.min(totalCount, count);
+      isFirstOperator = false;
+    }
+
+    return totalCount;
+  }
+
+  async function sumCountsForPrefix(prefix: string): Promise<number> {
+    let sum = 0;
+    for await (const [, value] of db.iterator({
+      gte: prefix,
+      lt: prefix + LastUnicodeCharacter
+    })) {
+      sum += Number(value);
+    }
+    return sum;
+  }
+
+  async function count(queryObject?: object): Promise<number> {
+    if (!queryObject || Object.keys(queryObject).length === 0) {
+      return getTotalCount();
+    }
+
+    let totalCount = 0;
+    let isFirstCondition = true;
+
+    for (const [key, value] of Object.entries(queryObject)) {
+      if (key === '$or') {
+        const uniqueIds = new Set<string>();
+        for (const subQuery of value as object[]) {
+          const subQueryIds = await getAllIdsForQuery(subQuery);
+          subQueryIds.forEach(id => uniqueIds.add(id));
+        }
+        const orCount = uniqueIds.size;
+        totalCount = isFirstCondition ? orCount : Math.min(totalCount, orCount);
+      } else if (key.startsWith('$')) {
+        throw new Error(`Unsupported top-level operator: ${key}`);
+      } else {
+        let fieldCount;
+        if (isObject(value) && Object.keys(value).some(k => k.startsWith('$'))) {
+          fieldCount = await getCountForOperators('', key, value as object);
+        } else {
+          fieldCount = await getCountForKeyValue('', key, value);
+        }
+        totalCount = isFirstCondition ? fieldCount : Math.min(totalCount, fieldCount);
+      }
+      isFirstCondition = false;
+    }
+
+    return totalCount;
   }
 
   async function query(queryObject?: object, options?: { limit?: number; offset?: number; sort?: { [key: string]: 1 | -1 }; project?: { [key: string]: 1 } }): Promise<Document[]> {
@@ -386,48 +579,183 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
     return results.filter((doc): doc is Document => doc !== undefined).slice(offset, offset + limit);
   }
 
+  async function batchInsert(documents: Document[]): Promise<Document[]> {
+    if (!Array.isArray(documents) || documents.length === 0) {
+      throw new Error('doubledb.batchInsert: documents must be a non-empty array');
+    }
+
+    const idsToRollback = new Set<string>();
+    try {
+      const ops: { type: 'put'; key: string; value: string }[] = [];
+      const processedDocs: Document[] = [];
+
+      for (const doc of documents) {
+        const id = doc.id || uuid();
+        const puttableRecord = { id, ...doc };
+        ops.push({ type: 'put', key: id, value: JSON.stringify(puttableRecord) });
+        processedDocs.push(puttableRecord);
+        idsToRollback.add(id);
+      }
+
+      // First, batch insert all documents
+      await db.batch(ops);
+
+      // Process indexes and counts sequentially to avoid race conditions
+      for (const doc of processedDocs) {
+        await addToIndexes(doc.id!, doc);
+      }
+
+      // Update the total count once with the total number of documents
+      const currentTotal = await getTotalCount();
+      await db.put('counts.__total__=documents', (currentTotal + documents.length).toString());
+
+      return processedDocs;
+    } catch (error) {
+      // Attempt to rollback
+      try {
+        for (const id of idsToRollback) {
+          const doc = await read(id).catch((): undefined => undefined);
+          if (doc) {
+            await removeIndexesForDocument(id, doc);
+            await db.del(id).catch((): void => {});
+          }
+        }
+      } catch (rollbackError) {
+        console.error('Error during rollback:', rollbackError);
+      }
+      throw error;
+    }
+  }
+
+  async function upsert(id: string, document: Document): Promise<Document> {
+    if (!id) {
+      throw new Error('doubledb.upsert: no id was supplied to upsert function');
+    }
+
+    if (!document) {
+      throw new Error('doubledb.upsert: no document was supplied to upsert function');
+    }
+
+    const existingDocument = await db.get(id).catch(notFoundToUndefined);
+
+    if (existingDocument) {
+      await removeIndexesForDocument(id, existingDocument);
+    } else {
+      await incrementCount('', '__total__', 'documents');
+    }
+
+    const puttableRecord = {
+      ...JSON.parse(existingDocument || '{}'),
+      ...document,
+      id
+    };
+
+    await db.put(id, JSON.stringify(puttableRecord));
+    await addToIndexes(id, puttableRecord);
+
+    return puttableRecord;
+  }
+
   async function handleOperators(key: string, operators: object): Promise<Set<string>> {
     let resultIds = new Set<string>();
     let isFirstOperator = true;
 
     for (const [op, value] of Object.entries(operators)) {
-      let ids;
-      switch (op) {
-        case '$eq':
-          ids = await getIdsForKeyValue(key, value);
-          break;
-        case '$ne':
-          ids = await getIdsForKeyValueNot(key, value);
-          break;
-        case '$gt':
-        case '$gte':
-        case '$lt':
-        case '$lte':
-          ids = await getIdsForKeyValueRange(key, op, value);
-          break;
-        case '$in':
-          ids = await getIdsForKeyValueIn(key, value as any[]);
-          break;
-        case '$nin':
-          ids = await getIdsForKeyValueNotIn(key, value as any[]);
-          break;
-        case '$all':
-          ids = await getIdsForKeyValueAll(key, value as any[]);
-          break;
-        case '$exists':
-          ids = await getIdsForKeyExists(key, value as boolean);
-          break;
-        case '$not':
-          ids = await handleOperators(key, value as object);
-          ids = await getAllIdsExcept(ids);
-          break;
-        case '$sw':
-          ids = await getIdsForKeyValueStartsWith(key, value as string);
-          break;
-        default:
-          // For unsupported operators, fall back to filtering all documents
-          return getAllIds();
+      let ids: Set<string>;
+      try {
+        switch (op) {
+          case '$eq':
+            ids = await getIdsForKeyValue(key, value);
+            break;
+
+          case '$ne':
+            const allIdsNe = await getAllIds();
+            const matchingIdsNe = await getIdsForKeyValue(key, value);
+            ids = new Set([...allIdsNe].filter(id => !matchingIdsNe.has(id)));
+            break;
+
+          case '$gt':
+          case '$gte':
+          case '$lt':
+          case '$lte':
+            if (value === null || value === undefined) {
+              throw new Error(`${op} operator requires a non-null value`);
+            }
+            // Convert dates to comparable format
+            const compareValue = value instanceof Date ? value.toISOString() : value;
+            ids = await getIdsForKeyValueRange(key, op, compareValue);
+            break;
+
+          case '$in':
+            if (!Array.isArray(value)) {
+              throw new Error('$in operator requires an array');
+            }
+            if (value.length === 0) {
+              ids = new Set<string>(); // Empty array means no matches
+            } else {
+              ids = await getIdsForKeyValueIn(key, value);
+            }
+            break;
+
+          case '$nin':
+            if (!Array.isArray(value)) {
+              throw new Error('$nin operator requires an array');
+            }
+            if (value.length === 0) {
+              ids = await getAllIds(); // Empty array means all documents match
+            } else {
+              ids = await getIdsForKeyValueNotIn(key, value);
+            }
+            break;
+
+          case '$exists':
+            if (typeof value !== 'boolean') {
+              throw new Error('$exists operator requires a boolean value');
+            }
+            ids = await getIdsForKeyExists(key, value);
+            break;
+
+          case '$all':
+            if (!Array.isArray(value)) {
+              throw new Error('$all operator requires an array');
+            }
+            if (value.length === 0) {
+              ids = await getAllIds(); // Empty array means all documents match
+            } else {
+              ids = await getIdsForKeyValueAll(key, value);
+            }
+            break;
+
+          case '$not':
+            if (value === null || value === undefined) {
+              throw new Error('$not operator requires a non-null value');
+            }
+            if (isObject(value)) {
+              const matchingIds = await handleOperators(key, value as object);
+              const allIds = await getAllIds();
+              ids = new Set([...allIds].filter(id => !matchingIds.has(id)));
+            } else {
+              ids = await getIdsForKeyValueNot(key, value);
+            }
+            break;
+
+          case '$sw':
+            if (typeof value !== 'string') {
+              throw new Error('$sw operator requires a string value');
+            }
+            ids = await getIdsForKeyValueStartsWith(key, value);
+            break;
+
+          default:
+            throw new Error(`Unsupported operator: ${op}`);
+        }
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new Error(`Error processing ${op} operator for key ${key}: ${error.message}`);
+        }
+        throw error;
       }
+
       resultIds = isFirstOperator ? ids : new Set([...resultIds].filter(id => ids.has(id)));
       isFirstOperator = false;
     }
@@ -547,69 +875,52 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
 
   async function getAllIds(): Promise<Set<string>> {
     const ids = new Set<string>();
-    for await (const key of db.keys({gte: '', lt: 'indexes'})) {
-      ids.add(key);
+    for await (const key of db.keys({
+      // Only get keys that don't start with 'indexes' or 'counts'
+      gt: '\x00',
+      lt: 'counts'
+    })) {
+      // Additional check to ensure we only get document IDs
+      if (!key.startsWith('indexes') && !key.startsWith('counts')) {
+        ids.add(key);
+      }
     }
     return ids;
+  }
+
+  // Helper function for count to get all matching IDs for a query
+  async function getAllIdsForQuery(queryObject: object): Promise<Set<string>> {
+    let resultIds = new Set<string>();
+    let isFirstCondition = true;
+
+    for (const [key, value] of Object.entries(queryObject)) {
+      if (key === '$or') {
+        const orResults = new Set<string>();
+        for (const subQuery of value as object[]) {
+          const subQueryIds = await getAllIdsForQuery(subQuery);
+          subQueryIds.forEach(id => orResults.add(id));
+        }
+        resultIds = isFirstCondition ? orResults : new Set([...resultIds].filter(id => orResults.has(id)));
+      } else if (key.startsWith('$')) {
+        throw new Error(`Unsupported top-level operator: ${key}`);
+      } else {
+        let ids;
+        if (isObject(value) && Object.keys(value).some(k => k.startsWith('$'))) {
+          ids = await handleOperators(key, value as object);
+        } else {
+          ids = await getIdsForKeyValue(key, value);
+        }
+        resultIds = isFirstCondition ? ids : new Set([...resultIds].filter(id => ids.has(id)));
+      }
+      isFirstCondition = false;
+    }
+
+    return resultIds;
   }
 
   async function getAllIdsExcept(excludeIds: Set<string>): Promise<Set<string>> {
     const allIds = await getAllIds();
     return new Set([...allIds].filter(id => !excludeIds.has(id)));
-  }
-
-  async function batchInsert(documents: Document[]): Promise<Document[]> {
-    if (!Array.isArray(documents) || documents.length === 0) {
-      throw new Error('doubledb.batchInsert: documents must be a non-empty array');
-    }
-
-    const ops: { type: 'put'; key: string; value: string }[] = [];
-    for (const doc of documents) {
-      const id = doc.id || uuid();
-      const puttableRecord = { id, ...doc };
-      ops.push({ type: 'put', key: id, value: JSON.stringify(puttableRecord) });
-    }
-
-    await db.batch(ops);
-
-    // Index each document in parallel
-    await Promise.all(documents.map(async doc => {
-      const id = doc.id || uuid();
-      const puttableRecord = { id, ...doc };
-      await addToIndexes(id, puttableRecord);
-    }));
-
-    return documents.map(doc => {
-      const id = doc.id || uuid();
-      return { id, ...doc };
-    });
-  }
-
-  async function upsert(id: string, document: Document): Promise<Document> {
-    if (!id) {
-      throw new Error('doubledb.upsert: no id was supplied to upsert function');
-    }
-
-    if (!document) {
-      throw new Error('doubledb.upsert: no document was supplied to upsert function');
-    }
-
-    const existingDocument = await db.get(id).catch(notFoundToUndefined);
-
-    if (existingDocument) {
-      await removeIndexesForDocument(id, existingDocument);
-    }
-
-    const puttableRecord = {
-      ...JSON.parse(existingDocument || '{}'),
-      ...document,
-      id
-    };
-
-    await db.put(id, JSON.stringify(puttableRecord));
-    await addToIndexes(id, puttableRecord);
-
-    return puttableRecord;
   }
 
   return {
@@ -622,6 +933,7 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
     remove,
     read,
     query,
+    count,
     close: db.close.bind(db),
     batchInsert,
     upsert
