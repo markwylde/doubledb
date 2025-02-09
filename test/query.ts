@@ -198,6 +198,33 @@ test('query limit, offset, sort', async () => {
   await db.close();
 });
 
+test('query sort with nested fields', async () => {
+  const db = await setupTestDb();
+  await db.insert({ value: { category: 2, name: 'B' } });
+  await db.insert({ value: { category: 1, name: 'A' } });
+  await db.insert({ value: { category: 1, name: 'C' } });
+  await db.insert({ value: { category: 2, name: 'D' } });
+
+  const result = await db.query({}, {
+    sort: {
+      'value.category': 1,
+      'value.name': 1
+    }
+  });
+
+  assert.strictEqual(result.length, 4);
+  assert.strictEqual(result[0].value.category, 1);
+  assert.strictEqual(result[0].value.name, 'A');
+  assert.strictEqual(result[1].value.category, 1);
+  assert.strictEqual(result[1].value.name, 'C');
+  assert.strictEqual(result[2].value.category, 2);
+  assert.strictEqual(result[2].value.name, 'B');
+  assert.strictEqual(result[3].value.category, 2);
+  assert.strictEqual(result[3].value.name, 'D');
+
+  await db.close();
+});
+
 test('query with sort option', async () => {
   const db = await setupTestDb();
   await db.insert({ value: 'gamma' });

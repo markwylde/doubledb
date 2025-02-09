@@ -586,11 +586,16 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
     if (options?.sort) {
       const sortFields = Object.entries(options.sort);
       results.sort((a, b) => {
-        for (const [field, direction] of sortFields) {
-          if (a[field] < b[field]) return direction === 1 ? -1 : 1;
-          if (a[field] > b[field]) return direction === 1 ? 1 : -1;
-        }
-        return 0;
+          for (const [field, direction] of sortFields) {
+              const aValue = field.split('.').reduce((obj, key) => obj[key], a);
+              const bValue = field.split('.').reduce((obj, key) => obj[key], b);
+
+              if (aValue < bValue)
+                return direction === 1 ? -1 : 1;
+              if (aValue > bValue)
+                return direction === 1 ? 1 : -1;
+          }
+          return 0;
       });
     }
 
