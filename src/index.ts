@@ -413,7 +413,7 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
 
   async function remove(id: string): Promise<void> {
     if (!id) {
-      throw new Error('doubledb.remove: no id was supplied to replace function');
+      throw new Error('doubledb.remove: no id was supplied to remove function');
     }
 
     const existingDocument = await db.get(id)
