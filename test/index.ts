@@ -374,7 +374,7 @@ test('remove - missing id argument - throws', async () => {
     await db.remove(null);
   } catch (error) {
     await db.close();
-    assert.strictEqual((error as Error).message, 'doubledb.remove: no id was supplied to replace function');
+    assert.strictEqual((error as Error).message, 'doubledb.remove: no id was supplied to remove function');
   }
 });
 
