@@ -9,8 +9,8 @@ npm install --save doubledb
 
 ## Usage
 ```javascript
-import createDoubledb from 'doubledb';
-const doubledb = await createDoubledb('./data');
+import createDoubleDb from 'doubledb';
+const doubledb = await createDoubleDb('./data');
 
 // Insert a document
 await doubledb.insert({
