@@ -210,12 +210,12 @@ test('create - missing arguments - throws', async () => {
   await fs.rm(testDir, { recursive: true }).catch(() => {});
   const db = await createDoubleDb(testDir);
 
-  try {
-    await db.insert();
-  } catch (error) {
-    await db.close();
-    assert.strictEqual((error as Error).message, 'doubledb.insert: no document was supplied to insert function');
-  }
+  await assert.rejects(
+    db.insert(),
+    /doubledb.insert: no document was supplied to insert function/
+  );
+
+  await db.close();
 });
 
 test('replace - missing id argument - throws', async () => {
