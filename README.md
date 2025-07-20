@@ -19,7 +19,7 @@ await doubledb.insert({
   lastName: 'Bloggs',
   stats: {
     wins: 10,
-    loses: 5
+    losses: 5
   },
   skills: ['cooking', 'running']
 });
