@@ -64,7 +64,7 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
             currentCount = 0;
           }
         } catch (error) {
-          if (error.code === 'LEVEL_NOT_FOUND') {
+          if (error instanceof Error && 'code' in error && error.code === 'LEVEL_NOT_FOUND') {
             currentCount = 0;
           } else {
             throw error;
@@ -75,12 +75,12 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
         await db.put(countKey, newCount.toString());
         break;
       } catch (error) {
-        if (error.code === 'LEVEL_NOT_FOUND') {
+        if (error instanceof Error && 'code' in error && error.code === 'LEVEL_NOT_FOUND') {
           await db.put(countKey, '1');
           break;
         }
         // If we get a conflict, retry
-        if (error.code === 'LEVEL_LOCKED') {
+        if (error instanceof Error && 'code' in error && error.code === 'LEVEL_LOCKED') {
           continue;
         }
         console.error('ERROR in incrementCount:', error);
@@ -102,7 +102,7 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
             currentCount = 0;
           }
         } catch (error) {
-          if (error.code === 'LEVEL_NOT_FOUND') {
+          if (error instanceof Error && 'code' in error && error.code === 'LEVEL_NOT_FOUND') {
             currentCount = 0;
           } else {
             throw error;
@@ -117,12 +117,12 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
         }
         break;
       } catch (error) {
-        if (error.code === 'LEVEL_NOT_FOUND') {
+        if (error instanceof Error && 'code' in error && error.code === 'LEVEL_NOT_FOUND') {
           // Key doesn't exist, nothing to decrement
           break;
         }
         // If we get a conflict, retry
-        if (error.code === 'LEVEL_LOCKED') {
+        if (error instanceof Error && 'code' in error && error.code === 'LEVEL_LOCKED') {
           continue;
         }
         console.error('ERROR in decrementCount:', error);
@@ -438,7 +438,7 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
       }
       return count;
     } catch (error) {
-      if (error.code === 'LEVEL_NOT_FOUND') {
+      if (error instanceof Error && 'code' in error && error.code === 'LEVEL_NOT_FOUND') {
         return 0;
       }
       console.error('ERROR in getCountForKeyValue:', error);
@@ -563,7 +563,7 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
     for (const [key, value] of Object.entries(queryObject)) {
       if (key === '$or') {
         const orResults = await Promise.all((value as object[]).map(subQuery => query(subQuery)));
-        const orIds = new Set(orResults.flat().map(doc => doc.id));
+        const orIds = new Set(orResults.flat().map(doc => doc.id).filter((id): id is string => id !== undefined));
         resultIds = isFirstCondition ? orIds : new Set([...resultIds].filter(id => orIds.has(id)));
       } else if (key.startsWith('$')) {
         throw new Error(`Unsupported top-level operator: ${key}`);
@@ -587,9 +587,10 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
       const sortFields = Object.entries(options.sort);
       results.sort((a, b) => {
           for (const [field, direction] of sortFields) {
-              const aValue = field.split('.').reduce((obj, key) => obj[key], a);
-              const bValue = field.split('.').reduce((obj, key) => obj[key], b);
+              const aValue = field.split('.').reduce((obj: any, key) => obj?.[key], a);
+              const bValue = field.split('.').reduce((obj: any, key) => obj?.[key], b);
 
+              if (aValue === undefined || bValue === undefined) continue;
               if (aValue < bValue)
                 return direction === 1 ? -1 : 1;
               if (aValue > bValue)
@@ -602,9 +603,11 @@ async function createDoubleDb(dataDirectory: string): Promise<DoubleDb> {
     if (options?.project) {
       results = results.map(doc => {
         const projected: Document = {};
-        for (const field of Object.keys(options.project)) {
-          if (field in doc) {
-            projected[field] = doc[field];
+        if (doc) {
+          for (const field of Object.keys(options.project!)) {
+            if (field in doc) {
+              projected[field] = doc[field];
+            }
           }
         }
         return projected;
