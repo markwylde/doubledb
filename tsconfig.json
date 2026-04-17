@@ -1,21 +1,16 @@
 {
   "compilerOptions": {
-    "module": "ESNext",
+    "module": "Node16",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "target": "esnext",
     "noImplicitAny": true,
-    "moduleResolution": "node",
+    "types": ["node"],
+    "moduleResolution": "node16",
     "sourceMap": true,
+    "rootDir": "src",
     "outDir": "dist",
-    "declaration": true,
-    "baseUrl": ".",
-    "paths": {
-      "*": [
-        "node_modules/*",
-        "src/types/*"
-      ]
-    }
+    "declaration": true
   },
   "include": [
       "src/**/*"
